@@ -1,0 +1,121 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.platform }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install runtime dependencies
+        run: npm ci
+
+      - name: Prune runtime (platform-specific)
+        shell: bash
+        run: |
+          rm -rf node_modules/sharp node_modules/@img node_modules/onnxruntime-web
+          case "${{ matrix.platform }}" in
+            macos-latest) rm -rf node_modules/onnxruntime-node/bin/napi-v3/linux node_modules/onnxruntime-node/bin/napi-v3/win32 node_modules/onnxruntime-node/bin/napi-v3/darwin/x64 ;;
+            ubuntu-22.04) rm -rf node_modules/onnxruntime-node/bin/napi-v3/darwin node_modules/onnxruntime-node/bin/napi-v3/win32 ;;
+            windows-latest) rm -rf node_modules/onnxruntime-node/bin/napi-v3/darwin node_modules/onnxruntime-node/bin/napi-v3/linux ;;
+          esac
+
+      # Tauri signs the app bundle and sidecars, but resources under
+      # node_modules are copied verbatim — their Mach-O files must already
+      # carry a Developer ID signature or notarization rejects the app.
+      - name: Import Apple signing certificate
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" build.keychain
+          rm /tmp/certificate.p12
+
+      - name: Sign bundled native modules
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          find node_modules \( -name "*.dylib" -o -name "*.node" \) -type f \
+            -exec codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" {} \;
+
+      - name: Stage node sidecar binary
+        shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          NODE_BIN="$(which node || command -v node)"
+          case "${{ matrix.platform }}" in
+            macos-latest) cp "$NODE_BIN" src-tauri/binaries/node-aarch64-apple-darwin ;;
+            ubuntu-22.04) cp "$NODE_BIN" src-tauri/binaries/node-x86_64-unknown-linux-gnu ;;
+            windows-latest) cp "$NODE_BIN" src-tauri/binaries/node-x86_64-pc-windows-msvc.exe ;;
+          esac
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Aloud ${{ github.ref_name }}"
+          releaseDraft: true
+
+      # Stable, unversioned aliases so the site can link
+      # releases/latest/download/<name> directly to the current build.
+      - name: Publish stable-named download aliases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p /tmp/alias
+          case "${{ matrix.platform }}" in
+            macos-latest)
+              cp src-tauri/target/release/bundle/dmg/*.dmg /tmp/alias/Aloud-macOS-aarch64.dmg ;;
+            windows-latest)
+              cp src-tauri/target/release/bundle/msi/*.msi /tmp/alias/Aloud-Windows-x64.msi
+              cp src-tauri/target/release/bundle/nsis/*-setup.exe /tmp/alias/Aloud-Windows-x64-setup.exe ;;
+            ubuntu-22.04)
+              cp src-tauri/target/release/bundle/deb/*.deb /tmp/alias/Aloud-Linux-amd64.deb ;;
+          esac
+          gh release upload "${{ github.ref_name }}" /tmp/alias/* --clobber
