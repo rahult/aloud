@@ -8,6 +8,7 @@ use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 const DEFAULT_PORT: u16 = 8789;
 const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Space";
@@ -144,12 +145,30 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
+// Silent auto-update: check GitHub Releases in the background, and if a
+// newer signed build exists, download, install, and restart into it.
+fn check_for_updates(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let Ok(updater) = app.updater() else {
+            return;
+        };
+        let Ok(Some(update)) = updater.check().await else {
+            return;
+        };
+        println!("chirp: updating to {}", update.version);
+        if update.download_and_install(|_, _| {}, || {}).await.is_ok() {
+            app.restart();
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
@@ -214,6 +233,8 @@ pub fn run() {
             if let Some(path) = cfg_path {
                 watch_config(app.handle().clone(), path, shortcut);
             }
+
+            check_for_updates(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
