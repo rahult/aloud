@@ -59,3 +59,20 @@ server — same `POST /api/tts` contract, plus optional per-request `voice`.
   first download.
 - Requires Node.js ≥ 20.11. Everything runs on CPU; a request takes a second or
   two for a sentence.
+
+## Desktop app
+
+Aloud also ships as a menu-bar desktop app (macOS, Windows, Linux) built with
+Tauri. It bundles its own Node runtime and this server, so there's nothing
+else to install:
+
+- Lives in the menu bar / system tray — no dock icon, no taskbar clutter.
+- **Cmd/Ctrl+Shift+Space** speaks whatever is on the clipboard through the OS
+  audio output. Press it again to stop.
+- The tray menu's **Show Aloud** opens the same web UI at
+  `http://127.0.0.1:8789/` in a small window; closing the window just hides
+  it. **Quit** exits the app.
+
+Download the latest build for your platform from
+[GitHub releases](https://github.com/rahult/aloud/releases). The first TTS
+call still downloads the ~90 MB model, same as the standalone server.
