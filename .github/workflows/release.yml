@@ -43,7 +43,10 @@ jobs:
       - name: Prune runtime (platform-specific)
         shell: bash
         run: |
-          rm -rf node_modules/sharp node_modules/@img node_modules/onnxruntime-web
+          # sharp must stay: @huggingface/transformers imports it at load time.
+          # Its @img binaries are platform-specific optional deps, so each
+          # bundle only carries its own arch anyway.
+          rm -rf node_modules/onnxruntime-web
           case "${{ matrix.platform }}" in
             macos-latest) rm -rf node_modules/onnxruntime-node/bin/napi-v3/linux node_modules/onnxruntime-node/bin/napi-v3/win32 node_modules/onnxruntime-node/bin/napi-v3/darwin/x64 ;;
             ubuntu-22.04) rm -rf node_modules/onnxruntime-node/bin/napi-v3/darwin node_modules/onnxruntime-node/bin/napi-v3/win32 ;;

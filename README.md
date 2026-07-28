@@ -33,10 +33,15 @@ node say.mjs "Hullo." -v bm_george               # British voice
 | `POST /api/tts` | Body `{"text": "…", "voice": "af_heart", "speed": 1.25}` → `audio/wav`. Max 2000 chars, generation is serialized. `voice` and `speed` (0.5–2, default 1) are optional. |
 | `GET /api/voices` | List of voices: `[{id, label, lang}]`. |
 | `GET /api/health` | `{ok, modelLoaded}` — model loads lazily on first TTS call. |
+| `GET /api/settings` | `{port, hotkey, activePort}` — current settings, defaults applied. |
+| `POST /api/settings` | Body `{"port": 8800, "hotkey": "CmdOrCtrl+Shift+S"}` → persists to `~/.chirp/config.json`. Blank values restore defaults. Port binds on next start; the desktop app re-registers the hotkey live. |
 | `GET /` | Web UI. |
 
 CORS is open (`Access-Control-Allow-Origin: *`) so any local web app can call
 it directly. Port via `CHIRP_PORT` (default 8789); CLI target via `CHIRP_URL`.
+Both fall back to the port saved in `~/.chirp/config.json`, which the web
+UI's Settings panel edits — the same file the desktop app reads for its port
+and global shortcut.
 
 ```js
 const r = await fetch('http://127.0.0.1:8789/api/tts', {

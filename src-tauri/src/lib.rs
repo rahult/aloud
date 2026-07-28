@@ -179,7 +179,7 @@ pub fn run() {
                 WebviewUrl::External(base_url().parse().expect("valid base url")),
             )
             .title("Chirp")
-            .inner_size(420.0, 560.0)
+            .inner_size(560.0, 640.0)
             .build()?;
             // Closing the window hides it; the app lives in the tray.
             let w = window.clone();

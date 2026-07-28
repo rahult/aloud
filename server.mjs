@@ -186,14 +186,19 @@ const PAGE = `<!doctype html>
   --ease:cubic-bezier(.22,1,.36,1)
  }
  *{box-sizing:border-box;margin:0}
- body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);min-height:100vh;display:flex;flex-direction:column}
- header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 28px;border-bottom:1px solid var(--hairline)}
- .wordmark{font:400 1.35rem/1 var(--serif)}
+ body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);min-height:100vh;display:flex}
+ aside{width:148px;flex:none;min-height:100vh;position:sticky;top:0;align-self:flex-start;display:flex;flex-direction:column;padding:22px 0 16px;border-right:1px solid var(--hairline)}
+ .wordmark{padding:0 20px;font:400 1.35rem/1 var(--serif)}
  .wordmark i{color:var(--amber);font-style:normal}
- .status{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--soft)}
- .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:background .5s}
+ nav{margin-top:32px;display:flex;flex-direction:column;gap:2px}
+ .nav{background:none;border:none;border-radius:0;text-align:left;padding:8px 20px;font:13.5px var(--sans);color:var(--soft);cursor:pointer;transition:color .15s,background .15s}
+ .nav:hover{color:var(--ink)}
+ .nav.active{color:var(--amber);background:var(--raised)}
+ .status{margin-top:auto;padding:14px 20px 0;border-top:1px solid var(--hairline);display:flex;align-items:flex-start;gap:8px;font-size:11.5px;color:var(--soft)}
+ .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);transition:background .5s;flex:none;margin-top:4px}
  .status.ready .dot{background:var(--amber)}
- main{width:min(640px,92vw);margin:0 auto;padding:clamp(40px,8vh,72px) 0 80px;flex:1}
+ main{flex:1;min-width:0;padding:clamp(32px,6vh,56px) clamp(20px,4vw,40px) 64px}
+ section{max-width:560px}
  h1{font:400 clamp(1.6rem,3.6vw,2.1rem)/1.25 var(--serif);letter-spacing:.005em}
  h1 em{color:var(--amber)}
  .sub{color:var(--soft);font-size:14px;margin:10px 0 34px;max-width:46ch}
@@ -210,15 +215,9 @@ const PAGE = `<!doctype html>
  button.primary{background:var(--amber);border-color:var(--amber);color:var(--bg);font-weight:600;min-width:116px}
  button.primary:hover:not(:disabled){background:var(--amber-deep);border-color:var(--amber-deep)}
  button:disabled{opacity:.45;cursor:default}
- :is(select,button,summary,input[type=range]):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+ :is(select,button,input[type=range]):focus-visible{outline:2px solid var(--amber);outline-offset:2px}
  .error{margin:14px 0 0;color:var(--err);font-size:13.5px;display:none}
- details{margin-top:30px;border-top:1px solid var(--hairline)}
- summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:9px;color:var(--soft);font-size:13.5px;padding:14px 0;user-select:none}
- summary::-webkit-details-marker{display:none}
- summary::before{content:"";width:7px;height:7px;border-right:1.5px solid var(--faint);border-bottom:1.5px solid var(--faint);transform:rotate(-45deg);transition:transform .25s var(--ease)}
- details[open] summary::before{transform:rotate(45deg)}
- summary:hover{color:var(--ink)}
- .panel{padding:2px 0 10px}
+ .panel{display:grid;gap:22px;margin-top:6px}
  .setting{display:grid;grid-template-columns:52px 1fr 48px;align-items:center;gap:16px}
  .setting label{font-size:14px}
  .val{font-size:14px;font-variant-numeric:tabular-nums;text-align:right}
@@ -226,7 +225,7 @@ const PAGE = `<!doctype html>
  .text{background:var(--bg);border:1px solid var(--hairline);border-radius:8px;color:var(--ink);padding:7px 10px;font:13.5px var(--sans);width:100%;max-width:220px;transition:border-color .2s}
  .text:focus{outline:none;border-color:var(--amber-deep)}
  .note{font-size:11.5px;color:var(--amber);text-align:right;white-space:nowrap}
- .smsg{margin:12px 0 0;font-size:12.5px;color:var(--faint);min-height:1.2em}
+ .smsg{font-size:12.5px;color:var(--faint);min-height:1.2em}
  .smsg.err{color:var(--err)}
  input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;height:24px;cursor:pointer}
  input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--hairline);border-radius:1px}
@@ -234,40 +233,52 @@ const PAGE = `<!doctype html>
  input[type=range]:hover::-webkit-slider-thumb{transform:scale(1.2)}
  input[type=range]::-moz-range-track{height:2px;background:var(--hairline);border-radius:1px}
  input[type=range]::-moz-range-thumb{width:14px;height:14px;border:none;border-radius:50%;background:var(--amber)}
- .reset{margin-top:18px;background:none;border:none;padding:0;color:var(--faint);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+ .reset{background:none;border:none;padding:0;color:var(--faint);font-size:13px;text-decoration:underline;text-underline-offset:3px;justify-self:start}
  .reset:hover{color:var(--ink)}
  .hint{margin-top:34px;padding-top:16px;border-top:1px solid var(--hairline);color:var(--faint);font-size:12.5px;display:flex;justify-content:space-between;gap:10px 24px;flex-wrap:wrap}
  kbd{border:1px solid var(--hairline);border-bottom-width:2px;border-radius:5px;background:var(--raised);padding:1px 6px;font:11.5px var(--sans);color:var(--soft)}
  code{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--raised);padding:1px 5px;border-radius:4px}
  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
- header,main>*{animation:rise .55s var(--ease) both}
- main>*:nth-child(2){animation-delay:.05s}
- main>*:nth-child(3){animation-delay:.1s}
- main>*:nth-child(4){animation-delay:.15s}
- main>*:nth-child(5){animation-delay:.2s}
- main>*:nth-child(6){animation-delay:.25s}
+ aside,section>*{animation:rise .55s var(--ease) both}
+ section>*:nth-child(2){animation-delay:.05s}
+ section>*:nth-child(3){animation-delay:.1s}
+ section>*:nth-child(4){animation-delay:.15s}
+ section>*:nth-child(5){animation-delay:.2s}
+ section>*:nth-child(6){animation-delay:.25s}
  @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+ @media(max-width:640px){aside{width:112px}.wordmark,.nav,.status{padding-left:14px;padding-right:14px}}
  @media(max-width:520px){.controls{flex-direction:column}.controls>*{width:100%}}
 </style></head><body>
-<header>
+<aside>
  <div class="wordmark">Chirp<i>.</i></div>
- <div class="status" id="status"><span class="dot"></span><span id="statusText">First speak warms up the model</span></div>
-</header>
+ <nav>
+  <button class="nav active" data-view="voice">Voice</button>
+  <button class="nav" data-view="settings">Settings</button>
+ </nav>
+ <div class="status" id="status"><span class="dot"></span><span id="statusText">Warms up on first speak</span></div>
+</aside>
 <main>
- <h1>Type it. <em>Hear it.</em></h1>
- <p class="sub">Neural text-to-speech on this machine — Kokoro-82M, fully on-device. Nothing leaves.</p>
- <div class="field">
-  <textarea id="t" maxlength="${MAX_CHARS}" placeholder="Something worth hearing…" spellcheck="false">The quick brown fox jumps over the lazy dog.</textarea>
-  <span class="count" id="count"></span>
- </div>
- <div class="controls">
-  <select id="v" aria-label="Voice"></select>
-  <button class="primary" id="speak">Speak</button>
-  <button id="dl" disabled>Download</button>
- </div>
- <p class="error" id="err" role="alert"></p>
- <details id="settings">
-  <summary>Settings</summary>
+ <section id="view-voice">
+  <h1>Type it. <em>Hear it.</em></h1>
+  <p class="sub">Neural text-to-speech on this machine — Kokoro-82M, fully on-device. Nothing leaves.</p>
+  <div class="field">
+   <textarea id="t" maxlength="${MAX_CHARS}" placeholder="Something worth hearing…" spellcheck="false">The quick brown fox jumps over the lazy dog.</textarea>
+   <span class="count" id="count"></span>
+  </div>
+  <div class="controls">
+   <select id="v" aria-label="Voice"></select>
+   <button class="primary" id="speak">Speak</button>
+   <button id="dl" disabled>Download</button>
+  </div>
+  <p class="error" id="err" role="alert"></p>
+  <div class="hint">
+   <span><kbd>⌘</kbd> <kbd>↵</kbd> to speak</span>
+   <span><code>POST /api/tts</code> · port ${PORT} · local only</span>
+  </div>
+ </section>
+ <section id="view-settings" hidden>
+  <h1>Settings</h1>
+  <p class="sub">Saved on this machine — shared by the app, the server, and the CLI.</p>
   <div class="panel">
    <div class="setting">
     <label for="speed">Speed</label>
@@ -288,11 +299,7 @@ const PAGE = `<!doctype html>
    <p class="smsg" id="smsg"></p>
    <button class="reset" id="reset">Reset to defaults</button>
   </div>
- </details>
- <div class="hint">
-  <span><kbd>⌘</kbd> <kbd>↵</kbd> to speak</span>
-  <span><code>POST /api/tts</code> · port ${PORT} · local only</span>
- </div>
+ </section>
 </main>
 <script>
  var $=function(id){return document.getElementById(id)};
@@ -301,6 +308,16 @@ const PAGE = `<!doctype html>
   portIn=$('port'),hotkeyIn=$('hotkey'),portNote=$('portNote'),smsg=$('smsg'),smsgTimer=null;
  var MAX=${MAX_CHARS},DEF_VOICE='af_heart',DEF_SPEED=1;
  var audio=null,audioUrl=null;
+
+ var navs=document.querySelectorAll('.nav');
+ function showView(name){
+  navs.forEach(function(b){b.classList.toggle('active',b.getAttribute('data-view')===name)});
+  $('view-voice').hidden=name!=='voice';
+  $('view-settings').hidden=name!=='settings';
+  if(location.hash!=='#'+name)history.replaceState(null,'','#'+name);
+ }
+ navs.forEach(function(b){b.addEventListener('click',function(){showView(b.getAttribute('data-view'))})});
+ showView(location.hash==='#settings'?'settings':'voice');
 
  function fmtSpeed(n){n=Math.round(n*100)/100;return (n%1?n.toFixed(2).replace(/0$/,''):String(n))+'\\u00d7'}
  function showSpeed(){speedVal.textContent=fmtSpeed(+speed.value)}
