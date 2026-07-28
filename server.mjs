@@ -10,6 +10,10 @@
 //   GET  /                          → built-in web UI
 
 import http from 'node:http';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {spawn} from 'node:child_process';
 
 const PORT = Number(process.env.ALOUD_PORT ?? 8789);
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
@@ -75,6 +79,41 @@ function handleTts(req, res) {
   }).catch(e => send(res, 400, {error: e.message}));
 }
 
+// Local playback for /api/speak: one utterance at a time through the system
+// player; starting a new one (or POST /api/stop) replaces the current one.
+let player = null;
+
+function stopPlayback() {
+  if (!player) return false;
+  player.kill('SIGTERM');
+  player = null;
+  return true;
+}
+
+function playWav(wav) {
+  stopPlayback();
+  const f = path.join(os.tmpdir(), `aloud-${Date.now()}.wav`);
+  fs.writeFileSync(f, wav);
+  const [cmd, args] = process.platform === 'darwin' ? ['afplay', [f]]
+    : process.platform === 'win32' ? ['powershell', ['-NoProfile', '-c', `(New-Object Media.SoundPlayer '${f.replaceAll("'", "''")}').PlaySync()`]]
+    : ['aplay', [f]];
+  const child = spawn(cmd, args, {stdio: 'ignore'});
+  player = child;
+  child.on('exit', () => { fs.unlink(f, () => {}); if (player === child) player = null; });
+}
+
+function handleSpeak(req, res) {
+  readBody(req).then(body => {
+    const text = typeof body.text === 'string' ? body.text.trim() : '';
+    if (!text) return send(res, 400, {error: 'Body must include text.'});
+    if (text.length > MAX_CHARS) return send(res, 400, {error: `Text too long (max ${MAX_CHARS} chars).`});
+    const voice = VOICES.some(v => v.id === body.voice) ? body.voice : DEFAULT_VOICE;
+    queue = queue.then(() => generateSpeech(text, voice))
+      .then(wav => { playWav(wav); send(res, 200, {ok: true, chars: text.length, voice}); })
+      .catch(e => send(res, 500, {error: `TTS failed: ${e.message}`}));
+  }).catch(e => send(res, 400, {error: e.message}));
+}
+
 const PAGE = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Aloud — local text-to-speech</title>
@@ -124,6 +163,8 @@ const server = http.createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/api/health') return send(res, 200, {ok: true, modelLoaded: Boolean(model)});
   if (req.method === 'GET' && url.pathname === '/api/voices') return send(res, 200, VOICES);
   if (req.method === 'POST' && url.pathname === '/api/tts') return handleTts(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/speak') return handleSpeak(req, res);
+  if (req.method === 'POST' && url.pathname === '/api/stop') return send(res, 200, {stopped: stopPlayback()});
   if (req.method === 'GET' && url.pathname === '/') return send(res, 200, PAGE, {'Content-Type': 'text/html; charset=utf-8'});
   send(res, 404, {error: 'Not found.'});
 });
