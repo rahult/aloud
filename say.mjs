@@ -4,9 +4,14 @@
 //   node say.mjs "Hello" -o hello.wav     → writes a file
 //   node say.mjs "Hello" -v bf_emma       → pick a voice
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {execFile} from 'node:child_process';
 
-const BASE = process.env.CHIRP_URL ?? 'http://127.0.0.1:8789';
+// Match the server's configured port (~/.chirp/config.json) unless CHIRP_URL says otherwise.
+let cfgPort;
+try { cfgPort = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.chirp', 'config.json'), 'utf8')).port; } catch {}
+const BASE = process.env.CHIRP_URL ?? `http://127.0.0.1:${cfgPort ?? 8789}`;
 
 const args = process.argv.slice(2);
 let text = null, voice, out;

@@ -30,7 +30,7 @@ node say.mjs "Hullo." -v bm_george               # British voice
 
 | Endpoint | Description |
 | --- | --- |
-| `POST /api/tts` | Body `{"text": "…", "voice": "af_heart"}` → `audio/wav`. Max 2000 chars, generation is serialized. |
+| `POST /api/tts` | Body `{"text": "…", "voice": "af_heart", "speed": 1.25}` → `audio/wav`. Max 2000 chars, generation is serialized. `voice` and `speed` (0.5–2, default 1) are optional. |
 | `GET /api/voices` | List of voices: `[{id, label, lang}]`. |
 | `GET /api/health` | `{ok, modelLoaded}` — model loads lazily on first TTS call. |
 | `GET /` | Web UI. |

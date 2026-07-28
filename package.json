@@ -1,6 +1,6 @@
 {
   "name": "chirp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local neural text-to-speech as a tiny HTTP service. Kokoro-82M, fully on-device.",
   "type": "module",
   "engines": {
@@ -12,5 +12,8 @@
   },
   "dependencies": {
     "kokoro-js": "^1.2.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
   }
 }
