@@ -1,0 +1,16 @@
+{
+  "name": "aloud",
+  "version": "0.1.0",
+  "description": "Local neural text-to-speech as a tiny HTTP service. Kokoro-82M, fully on-device.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "say": "node say.mjs"
+  },
+  "dependencies": {
+    "kokoro-js": "^1.2.1"
+  }
+}
