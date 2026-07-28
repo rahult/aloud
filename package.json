@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "say": "node say.mjs"
+    "say": "node say.mjs",
+    "tauri": "tauri"
   },
   "dependencies": {
     "kokoro-js": "^1.2.1"
