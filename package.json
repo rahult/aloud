@@ -12,8 +12,5 @@
   },
   "dependencies": {
     "kokoro-js": "^1.2.1"
-  },
-  "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4"
   }
 }

@@ -59,6 +59,7 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then echo "APPLE_CERTIFICATE secret not set — skipping (unsigned build)"; exit 0; fi
           echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
           security create-keychain -p "" build.keychain
           security default-keychain -s build.keychain
@@ -72,6 +73,7 @@ jobs:
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
+          if [ -z "$APPLE_SIGNING_IDENTITY" ]; then echo "APPLE_SIGNING_IDENTITY secret not set — skipping"; exit 0; fi
           find node_modules \( -name "*.dylib" -o -name "*.node" \) -type f \
             -exec codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" {} \;
 
