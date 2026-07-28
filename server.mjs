@@ -1,4 +1,4 @@
-// Aloud — local neural text-to-speech as a tiny HTTP service.
+// Chirp — local neural text-to-speech as a tiny HTTP service.
 // Kokoro-82M runs fully on-device; no text or audio ever leaves the machine.
 //
 //   npm install && npm start        → http://127.0.0.1:8789
@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {spawn} from 'node:child_process';
 
-const PORT = Number(process.env.ALOUD_PORT ?? 8789);
+const PORT = Number(process.env.CHIRP_PORT ?? 8789);
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX';
 const MAX_CHARS = 2000;
 
@@ -44,7 +44,7 @@ async function generateSpeech(text, voice) {
   if (!model) {
     const {KokoroTTS} = await import('kokoro-js');
     model = await KokoroTTS.from_pretrained(MODEL_ID, {dtype: 'q8'});
-    console.log(`aloud: kokoro model loaded (${MODEL_ID}, q8)`);
+    console.log(`chirp: kokoro model loaded (${MODEL_ID}, q8)`);
   }
   const audio = await model.generate(text, {voice});
   return Buffer.from(audio.toWav());
@@ -92,7 +92,7 @@ function stopPlayback() {
 
 function playWav(wav) {
   stopPlayback();
-  const f = path.join(os.tmpdir(), `aloud-${Date.now()}.wav`);
+  const f = path.join(os.tmpdir(), `chirp-${Date.now()}.wav`);
   fs.writeFileSync(f, wav);
   const [cmd, args] = process.platform === 'darwin' ? ['afplay', [f]]
     : process.platform === 'win32' ? ['powershell', ['-NoProfile', '-c', `(New-Object Media.SoundPlayer '${f.replaceAll("'", "''")}').PlaySync()`]]
@@ -116,7 +116,7 @@ function handleSpeak(req, res) {
 
 const PAGE = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Aloud — local text-to-speech</title>
+<title>Chirp — local text-to-speech</title>
 <style>
  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#141311;color:#e8e4dc;font:16px/1.5 ui-serif,Georgia,serif}
  main{width:min(560px,90vw)}
@@ -130,7 +130,7 @@ const PAGE = `<!doctype html>
  .hint{margin-top:1rem;font-size:.8rem;color:#6f6a61}
  code{background:#1e1c19;padding:.1rem .35rem;border-radius:4px}
 </style></head><body><main>
-<h1>Aloud<span>.</span></h1>
+<h1>Chirp<span>.</span></h1>
 <p class="sub">Local neural text-to-speech. Kokoro-82M, on-device — nothing leaves this machine.</p>
 <textarea id="t" placeholder="Type something worth hearing…">The quick brown fox jumps over the lazy dog.</textarea>
 <div class="row">
@@ -154,7 +154,7 @@ const PAGE = `<!doctype html>
    dl.disabled=false;
   }catch(e){alert(e.message);speak.disabled=false;speak.textContent='Speak'}
  };
- dl.onclick=()=>{const a=document.createElement('a');a.href=lastUrl;a.download='aloud.wav';a.click()};
+ dl.onclick=()=>{const a=document.createElement('a');a.href=lastUrl;a.download='chirp.wav';a.click()};
 </script></main></body></html>`;
 
 const server = http.createServer((req, res) => {
@@ -170,5 +170,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`aloud listening on http://127.0.0.1:${PORT} (model loads on first /api/tts call)`);
+  console.log(`chirp listening on http://127.0.0.1:${PORT} (model loads on first /api/tts call)`);
 });

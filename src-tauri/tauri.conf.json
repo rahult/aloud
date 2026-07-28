@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Aloud",
+  "productName": "Chirp",
   "version": "0.1.0",
-  "identifier": "com.aloud.app",
+  "identifier": "com.chirp.app",
   "app": {
     "windows": [],
     "security": {

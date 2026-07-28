@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// say — CLI for a running Aloud server.
+// say — CLI for a running Chirp server.
 //   node say.mjs "Hello world"            → plays audio (macOS afplay)
 //   node say.mjs "Hello" -o hello.wav     → writes a file
 //   node say.mjs "Hello" -v bf_emma       → pick a voice
 import fs from 'node:fs';
 import {execFile} from 'node:child_process';
 
-const BASE = process.env.ALOUD_URL ?? 'http://127.0.0.1:8789';
+const BASE = process.env.CHIRP_URL ?? 'http://127.0.0.1:8789';
 
 const args = process.argv.slice(2);
 let text = null, voice, out;
@@ -36,7 +36,7 @@ if (out) {
   fs.writeFileSync(out, wav);
   console.log(`wrote ${out} (${(wav.length / 1024).toFixed(0)} KB)`);
 } else {
-  const f = `/tmp/aloud-${Date.now()}.wav`;
+  const f = `/tmp/chirp-${Date.now()}.wav`;
   fs.writeFileSync(f, wav);
   execFile('afplay', [f], e => {
     fs.unlinkSync(f);

@@ -1,0 +1,82 @@
+/* Chirp product site — the app's own palette: near-black, warm paper text,
+   amber accent. */
+:root {
+  --bg: #141311;
+  --raised: #1e1c19;
+  --ink: #e8e4dc;
+  --ink-soft: #9a948a;
+  --ink-faint: #6f6a61;
+  --hairline: #3a362f;
+  --amber: #c9a86a;
+  --amber-deep: #b08d4e;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: Georgia, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; margin: 0; }
+html { scroll-behavior: smooth; }
+body { font-family: var(--sans); color: var(--ink); background: var(--bg); line-height: 1.6; }
+img { max-width: 100%; display: block; }
+a { color: var(--amber); }
+
+.nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px; border-bottom: 1px solid var(--hairline);
+  background: rgba(20, 19, 17, 0.85); backdrop-filter: blur(14px);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.mark { width: 30px; height: 30px; border-radius: 9px; }
+.mark.small { width: 22px; height: 22px; border-radius: 7px; }
+.nav-link { text-decoration: none; color: var(--ink-soft); font-size: 14px; }
+.nav-link:hover { color: var(--ink); }
+
+main { max-width: 900px; margin: 0 auto; padding: 0 24px; }
+
+.hero { padding: 96px 0 72px; }
+.kicker { color: var(--amber); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 18px; }
+.hero h1 { font-family: var(--serif); font-size: clamp(42px, 7vw, 68px); line-height: 1.05; font-weight: 400; }
+.hero h1 em { color: var(--amber); font-style: italic; }
+.lede { max-width: 560px; margin-top: 22px; color: var(--ink-soft); font-size: 18px; }
+.cta { display: flex; align-items: center; gap: 18px; margin-top: 34px; flex-wrap: wrap; }
+.shortcut-hint { color: var(--ink-faint); font-size: 14px; }
+
+kbd {
+  display: inline-block; padding: 2px 7px; margin: 0 1px;
+  border: 1px solid var(--hairline); border-bottom-width: 2px; border-radius: 6px;
+  background: var(--raised); font-family: var(--sans); font-size: 0.85em; color: var(--ink);
+}
+code { background: var(--raised); padding: 0.1em 0.4em; border-radius: 5px; font-size: 0.9em; }
+
+.button {
+  display: inline-block; padding: 13px 26px; border-radius: 10px;
+  font-weight: 600; font-size: 15px; text-decoration: none;
+  border: 1px solid transparent;
+}
+.button.primary { background: var(--amber); color: #141311; }
+.button.primary:hover { background: var(--amber-deep); }
+.button.secondary { border-color: var(--hairline); color: var(--ink); background: var(--raised); }
+.button.secondary:hover { border-color: var(--ink-faint); }
+
+.how { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; padding: 24px 0 72px; }
+.step { background: var(--raised); border: 1px solid var(--hairline); border-radius: 14px; padding: 24px; }
+.step .num { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--amber); color: #141311; font-weight: 700; font-size: 14px; margin-bottom: 14px; }
+.step h3 { font-size: 17px; margin-bottom: 8px; }
+.step p { color: var(--ink-soft); font-size: 14.5px; }
+
+.principles { border-top: 1px solid var(--hairline); padding: 64px 0; }
+.principles h2, .download h2 { font-family: var(--serif); font-weight: 400; font-size: 30px; margin-bottom: 18px; }
+.principles ul { list-style: none; padding: 0; display: grid; gap: 12px; }
+.principles li { padding-left: 22px; position: relative; color: var(--ink-soft); }
+.principles li::before { content: "—"; position: absolute; left: 0; color: var(--amber); }
+
+.download { border-top: 1px solid var(--hairline); padding: 64px 0 88px; }
+.download > p { color: var(--ink-soft); margin-bottom: 24px; }
+.platforms { display: flex; gap: 14px; flex-wrap: wrap; }
+.src { margin-top: 22px; color: var(--ink-faint); font-size: 14px; max-width: 620px; }
+
+footer {
+  border-top: 1px solid var(--hairline); padding: 26px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--ink-faint); font-size: 14px;
+}

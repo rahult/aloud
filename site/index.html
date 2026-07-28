@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chirp — your clipboard, read aloud</title>
+  <meta name="description" content="Chirp is a free, open-source menu-bar app that reads your clipboard aloud with local neural text-to-speech. No cloud, no accounts.">
+  <link rel="icon" href="assets/chirp-icon.png" type="image/png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="nav">
+    <div class="brand"><img class="mark" src="assets/chirp-icon.png" alt="Chirp icon"><span>Chirp</span></div>
+    <a class="nav-link" href="https://github.com/rahult/chirp">GitHub</a>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <p class="kicker">Free &amp; open source · macOS, Windows, Linux</p>
+      <h1>Your clipboard,<br><em>read aloud.</em></h1>
+      <p class="lede">Chirp lives in your menu bar and turns any text you copy into natural speech — with a neural model that runs entirely on your machine. Nothing you copy ever leaves it.</p>
+      <div class="cta">
+        <a class="button primary" href="https://github.com/rahult/chirp/releases/latest/download/Chirp-macOS-aarch64.dmg" download>Download for macOS</a>
+        <span class="shortcut-hint">then press <kbd>⌃</kbd><kbd>⇧</kbd><kbd>Space</kbd> anywhere</span>
+      </div>
+    </section>
+
+    <section class="how">
+      <div class="step"><span class="num">1</span><h3>Copy anything</h3><p>An article, a diff, an email thread, a page of docs. If you can select it, Chirp can read it.</p></div>
+      <div class="step"><span class="num">2</span><h3>Press the shortcut</h3><p><kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd> from any app. Press it again to stop.</p></div>
+      <div class="step"><span class="num">3</span><h3>Keep working</h3><p>Eleven voices, instant playback, zero network calls. The Kokoro-82M model runs on your CPU.</p></div>
+    </section>
+
+    <section class="principles">
+      <h2>Deliberately small</h2>
+      <ul>
+        <li>Fully on-device — no API keys, no accounts, no audio in the cloud.</li>
+        <li>A menu-bar resident, not another window to manage.</li>
+        <li>An HTTP API on <code>127.0.0.1:8789</code> so your own tools can speak too.</li>
+      </ul>
+    </section>
+
+    <section id="download" class="download">
+      <h2>Download</h2>
+      <p>Signed and notarized builds for every platform:</p>
+      <div class="platforms">
+        <a class="button primary" href="https://github.com/rahult/chirp/releases/latest/download/Chirp-macOS-aarch64.dmg" download>macOS (Apple&nbsp;Silicon)</a>
+        <a class="button secondary" href="https://github.com/rahult/chirp/releases/latest/download/Chirp-Windows-x64.msi" download>Windows</a>
+        <a class="button secondary" href="https://github.com/rahult/chirp/releases/latest/download/Chirp-Linux-amd64.deb" download>Linux</a>
+      </div>
+      <p class="src">Prefer the service without the app? <code>npm install &amp;&amp; npm start</code> from <a href="https://github.com/rahult/chirp">the repo</a> gives you the same engine with a web UI. <a href="https://github.com/rahult/chirp/releases">All releases →</a></p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="brand"><img class="mark small" src="assets/chirp-icon.png" alt=""><span>Chirp</span></div>
+    <p>Heard, not seen.</p>
+  </footer>
+</body>
+</html>

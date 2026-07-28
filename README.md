@@ -1,4 +1,4 @@
-# Aloud
+# Chirp
 
 Local neural text-to-speech as a tiny HTTP service. Runs the
 [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX) model
@@ -36,7 +36,7 @@ node say.mjs "Hullo." -v bm_george               # British voice
 | `GET /` | Web UI. |
 
 CORS is open (`Access-Control-Allow-Origin: *`) so any local web app can call
-it directly. Port via `ALOUD_PORT` (default 8789); CLI target via `ALOUD_URL`.
+it directly. Port via `CHIRP_PORT` (default 8789); CLI target via `CHIRP_URL`.
 
 ```js
 const r = await fetch('http://127.0.0.1:8789/api/tts', {
@@ -50,7 +50,7 @@ const wav = await r.blob();
 ## Integrating with Margin
 
 Margin's narrator already speaks this exact protocol. To run Margin against a
-standalone Aloud instead of its embedded TTS, point its TTS base URL at this
+standalone Chirp instead of its embedded TTS, point its TTS base URL at this
 server — same `POST /api/tts` contract, plus optional per-request `voice`.
 
 ## Notes
@@ -62,17 +62,17 @@ server — same `POST /api/tts` contract, plus optional per-request `voice`.
 
 ## Desktop app
 
-Aloud also ships as a menu-bar desktop app (macOS, Windows, Linux) built with
+Chirp also ships as a menu-bar desktop app (macOS, Windows, Linux) built with
 Tauri. It bundles its own Node runtime and this server, so there's nothing
 else to install:
 
 - Lives in the menu bar / system tray — no dock icon, no taskbar clutter.
 - **Cmd/Ctrl+Shift+Space** speaks whatever is on the clipboard through the OS
   audio output. Press it again to stop.
-- The tray menu's **Show Aloud** opens the same web UI at
+- The tray menu's **Show Chirp** opens the same web UI at
   `http://127.0.0.1:8789/` in a small window; closing the window just hides
   it. **Quit** exits the app.
 
 Download the latest build for your platform from
-[GitHub releases](https://github.com/rahult/aloud/releases). The first TTS
+[GitHub releases](https://github.com/rahult/chirp/releases). The first TTS
 call still downloads the ~90 MB model, same as the standalone server.

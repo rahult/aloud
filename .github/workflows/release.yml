@@ -99,7 +99,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "Aloud ${{ github.ref_name }}"
+          releaseName: "Chirp ${{ github.ref_name }}"
           releaseDraft: true
 
       # Stable, unversioned aliases so the site can link
@@ -113,11 +113,11 @@ jobs:
           mkdir -p /tmp/alias
           case "${{ matrix.platform }}" in
             macos-latest)
-              cp src-tauri/target/release/bundle/dmg/*.dmg /tmp/alias/Aloud-macOS-aarch64.dmg ;;
+              cp src-tauri/target/release/bundle/dmg/*.dmg /tmp/alias/Chirp-macOS-aarch64.dmg ;;
             windows-latest)
-              cp src-tauri/target/release/bundle/msi/*.msi /tmp/alias/Aloud-Windows-x64.msi
-              cp src-tauri/target/release/bundle/nsis/*-setup.exe /tmp/alias/Aloud-Windows-x64-setup.exe ;;
+              cp src-tauri/target/release/bundle/msi/*.msi /tmp/alias/Chirp-Windows-x64.msi
+              cp src-tauri/target/release/bundle/nsis/*-setup.exe /tmp/alias/Chirp-Windows-x64-setup.exe ;;
             ubuntu-22.04)
-              cp src-tauri/target/release/bundle/deb/*.deb /tmp/alias/Aloud-Linux-amd64.deb ;;
+              cp src-tauri/target/release/bundle/deb/*.deb /tmp/alias/Chirp-Linux-amd64.deb ;;
           esac
           gh release upload "${{ github.ref_name }}" /tmp/alias/* --clobber

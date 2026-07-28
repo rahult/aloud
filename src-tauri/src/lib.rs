@@ -77,7 +77,7 @@ pub fn run() {
                 .shell()
                 .sidecar("node")?
                 .args([server.to_string_lossy().to_string()])
-                .env("ALOUD_PORT", "8789")
+                .env("CHIRP_PORT", "8789")
                 .spawn()?;
             app.manage(Backend(Mutex::new(Some(child))));
 
@@ -88,7 +88,7 @@ pub fn run() {
                 "main",
                 WebviewUrl::External(BASE_URL.parse().expect("valid base url")),
             )
-            .title("Aloud")
+            .title("Chirp")
             .inner_size(420.0, 560.0)
             .build()?;
             // Closing the window hides it; the app lives in the tray.
@@ -100,7 +100,7 @@ pub fn run() {
                 }
             });
 
-            let show = MenuItemBuilder::with_id("show", "Show Aloud").build(app)?;
+            let show = MenuItemBuilder::with_id("show", "Show Chirp").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
             TrayIconBuilder::new()
@@ -123,5 +123,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("error while running Aloud");
+        .expect("error while running Chirp");
 }
