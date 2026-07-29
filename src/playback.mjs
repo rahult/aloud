@@ -8,9 +8,13 @@
 //
 // Audio is produced one sentence at a time, which gives three things at once:
 // audio starts after the first sentence rather than the whole document,
-// skip/prev have somewhere to land, and pause has a boundary. The OS players
-// (afplay, aplay, PowerShell) cannot pause a running file, so pausing stops
-// between sentences and resuming replays the current one.
+// skip/prev have somewhere to land, and pause has a boundary.
+//
+// How pause behaves depends on the player. The OS players (afplay, aplay,
+// PowerShell) cannot pause a running file, so with them pausing stops between
+// sentences and resuming replays the current one. A player that reports
+// `supportsPause` — the desktop app's in-process one — is paused where it
+// stands and resumes from there.
 
 import {EventEmitter} from 'node:events';
 
@@ -25,6 +29,8 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
   let startedAt = 0;
   let durationMs = 0;
   let failures = 0;
+  let pausedAt = 0;
+  let audioFailures = 0;
 
   let cache = new Map();    // index → WAV buffer
   let pending = new Map();  // index → Promise<Buffer>
@@ -103,9 +109,18 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
     durationMs = player.wavDurationMs(wav);
     emit();
 
-    handle = player.play(wav, () => {
+    handle = player.play(wav, err => {
       if (mine !== epoch) return;
       handle = null;
+      if (err) {
+        bus.emit('fault', {scope: 'audio', index, message: String(err)});
+        audioFailures++;
+        // Generation failures have their own counter; a run of audio errors
+        // means the output device is gone, not that one sentence is bad.
+        if (audioFailures >= 3) { stop(); return; }
+      } else {
+        audioFailures = 0;
+      }
       index++;
       if (index >= sentences.length) finish();
       else playCurrent();
@@ -121,6 +136,8 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
     pending = new Map();
     index = 0;
     failures = 0;
+    audioFailures = 0;
+    pausedAt = 0;
     startedAt = 0;
     durationMs = 0;
 
@@ -136,13 +153,38 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
 
   function pause() {
     if (state !== 'speaking') return;
-    kill();
+    // A player that can really pause keeps its position; one that cannot has
+    // to be killed and will replay the sentence on resume.
+    if (player.supportsPause && handle) {
+      handle.pause();
+      pausedAt = Date.now();
+    } else {
+      kill();
+    }
     state = 'paused';
     emit();
   }
 
   function resume() {
     if (state !== 'paused') return;
+    if (player.supportsPause && handle) {
+      // The UI interpolates progress from startedAt, so move it forward by
+      // however long we were paused.
+      if (pausedAt) startedAt += Date.now() - pausedAt;
+      pausedAt = 0;
+      handle.resume();
+      state = 'speaking';
+      emit();
+    } else {
+      kill();
+      playCurrent();
+    }
+  }
+
+  // Replay the current sentence from its start, leaving the index alone.
+  // Used when the player changes underneath a live session.
+  function restartCurrent() {
+    if (state === 'idle') return;
     kill();
     playCurrent();
   }
@@ -169,6 +211,8 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
     pending = new Map();
     index = 0;
     failures = 0;
+    audioFailures = 0;
+    pausedAt = 0;
     state = 'idle';
     startedAt = 0;
     durationMs = 0;
@@ -206,7 +250,7 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
   }
 
   return {
-    start, pause, resume, next, prev, stop, toggle, togglePause, setOptions,
+    start, pause, resume, next, prev, stop, toggle, togglePause, restartCurrent, setOptions,
     getState, getSentences,
     on: (e, fn) => bus.on(e, fn),
     off: (e, fn) => bus.off(e, fn),
