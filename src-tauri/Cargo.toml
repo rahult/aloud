@@ -18,3 +18,15 @@ tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+# Synthetic Cmd/Ctrl+C for capturing the selection. Cross-platform.
+enigo = "0.6"
+
+# Accessibility permission, the Services menu, and Now Playing are macOS-only;
+# gating them keeps the Windows and Linux release builds from pulling ObjC.
+[target.'cfg(target_os = "macos")'.dependencies]
+macos-accessibility-client = "0.0.2"
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-app-kit = "0.3"
+block2 = "0.6"
+objc2-media-player = { version = "0.3", features = ["MPNowPlayingInfoCenter", "MPRemoteCommandCenter", "MPRemoteCommand"] }
