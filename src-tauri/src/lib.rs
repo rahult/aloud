@@ -2,6 +2,8 @@ mod events;
 mod selection;
 mod tray;
 #[cfg(target_os = "macos")]
+mod nowplaying;
+#[cfg(target_os = "macos")]
 mod services;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -18,6 +20,9 @@ const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Space";
 // server and the `say` CLI read. Port changes require an app restart to
 // bind; the hotkey is re-registered live by watch_config().
 static PORT: OnceLock<u16> = OnceLock::new();
+
+// The first sentence of the current session, for the Now Playing widget.
+static CURRENT_TITLE: Mutex<Option<String>> = Mutex::new(None);
 
 pub(crate) fn base_url() -> String {
     format!(
@@ -60,6 +65,12 @@ fn configured_input(path: Option<&Path>) -> String {
         .and_then(|v| v.as_str().map(str::to_string))
         .filter(|s| s == "clipboard" || s == "selection")
         .unwrap_or_else(|| "selection".to_string())
+}
+
+fn configured_now_playing(path: Option<&Path>) -> bool {
+    path.and_then(|p| config_value(p, "nowPlaying"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
 }
 
 fn config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
@@ -324,8 +335,15 @@ pub fn run() {
                             tray::apply(&h, &state);
                         }
                     }
+                    #[cfg(target_os = "macos")]
+                    {
+                        let title = CURRENT_TITLE.lock().unwrap().clone();
+                        nowplaying::update(&state, title.as_deref());
+                    }
                 }
-                events::Event::Sentences(_) => {}
+                events::Event::Sentences(sentences) => {
+                    *CURRENT_TITLE.lock().unwrap() = sentences.into_iter().next();
+                }
             });
             watch_accessibility();
 
@@ -372,12 +390,18 @@ pub fn run() {
                 let _ = ureq::post(format!("{}/api/hotkey-status", base_url()))
                     .send_json(serde_json::json!({"ok": ok, "hotkey": reported}));
             });
+            #[cfg(target_os = "macos")]
+            {
+                if configured_now_playing(cfg_path.as_deref()) {
+                    nowplaying::install_handlers();
+                }
+                services::register();
+            }
+
+            // Consumes cfg_path, so it goes last.
             if let Some(path) = cfg_path {
                 watch_config(app.handle().clone(), path, shortcut);
             }
-
-            #[cfg(target_os = "macos")]
-            services::register();
 
             check_for_updates(app.handle().clone());
             Ok(())
