@@ -1,3 +1,4 @@
+mod audio;
 mod events;
 mod selection;
 mod tray;
@@ -141,6 +142,86 @@ fn watch_accessibility() {
             }
         }
     });
+}
+
+// The audio device, opened once. None if the machine has no output device,
+// in which case the server keeps using its own player.
+static AUDIO: OnceLock<Option<audio::Audio>> = OnceLock::new();
+
+fn audio() -> Option<&'static audio::Audio> {
+    AUDIO
+        .get_or_init(|| match audio::Audio::new() {
+            Ok(a) => Some(a),
+            Err(e) => {
+                eprintln!("chirp: {e}; falling back to the server's player");
+                None
+            }
+        })
+        .as_ref()
+}
+
+// rodio has no end-of-track callback, so completion is polled and reported
+// back. The id travels with the report so the server can ignore one that
+// arrives after it has already moved on — which is exactly what happens when
+// a Stop is followed by a new Play and this thread is still running.
+fn play_and_report(id: u64) {
+    std::thread::spawn(move || {
+        let Some(a) = audio() else { return };
+        let outcome = ureq::get(format!("{}/api/audio/{}", base_url(), id))
+            .call()
+            .map_err(|e| format!("could not fetch audio: {e}"))
+            .and_then(|res| {
+                res.into_body()
+                    .read_to_vec()
+                    .map_err(|e| format!("could not read audio: {e}"))
+            })
+            .and_then(|bytes| a.play_bytes(bytes));
+
+        if let Err(e) = outcome {
+            report_ended(id, Some(e));
+            return;
+        }
+        loop {
+            // 50ms is inaudible at a sentence boundary and costs nothing.
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            if a.finished() {
+                report_ended(id, None);
+                return;
+            }
+        }
+    });
+}
+
+fn report_ended(id: u64, error: Option<String>) {
+    let body = match error {
+        Some(e) => serde_json::json!({ "error": e }),
+        None => serde_json::json!({}),
+    };
+    let _ = ureq::post(format!("{}/api/audio/{}/ended", base_url(), id)).send_json(body);
+}
+
+fn handle_audio(value: &serde_json::Value) {
+    let Some(cmd) = audio::parse_command(value) else {
+        return;
+    };
+    match cmd {
+        audio::Command::Play(id) => play_and_report(id),
+        audio::Command::Pause => {
+            if let Some(a) = audio() {
+                a.pause();
+            }
+        }
+        audio::Command::Resume => {
+            if let Some(a) = audio() {
+                a.resume();
+            }
+        }
+        audio::Command::Stop => {
+            if let Some(a) = audio() {
+                a.stop();
+            }
+        }
+    }
 }
 
 // Block until the TTS server answers (or ~10s elapse) so the window never
@@ -344,6 +425,7 @@ pub fn run() {
                 events::Event::Sentences(sentences) => {
                     *CURRENT_TITLE.lock().unwrap() = sentences.into_iter().next();
                 }
+                events::Event::Audio(value) => handle_audio(&value),
             });
             watch_accessibility();
 
