@@ -29,6 +29,8 @@
     ],
     "resources": {
       "../server.mjs": "server.mjs",
+      "../src": "src",
+      "../ui": "ui",
       "../node_modules": "node_modules"
     },
     "icon": [
