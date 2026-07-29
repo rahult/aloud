@@ -75,7 +75,35 @@ var $=function(id){return document.getElementById(id)};
   // only once the <select> has its options.
   speed.value=s.speed;showSpeed();rateBtn.textContent=fmtSpeed(s.speed);
   voicesReady.then(function(){if(s.voice)sel.value=s.voice});
+  $('input').value=s.input||'selection';
+  applyAccess(s);
  });
+
+ // Reading the selection needs Accessibility on macOS. Without it the hotkey
+ // silently does nothing, so say so plainly and offer the one button that
+ // helps. accessibilityOk is null until the desktop app reports in — in a
+ // plain browser there is no native layer, so nothing is shown.
+ function applyAccess(s){
+  var needs=$('input').value==='selection'&&s.accessibilityOk===false;
+  $('accessRow').hidden=!needs;
+  $('inputNote').textContent=needs?'needs permission':'';
+ }
+ $('input').addEventListener('change',function(){
+  post('/api/settings',{input:$('input').value})
+   .then(function(){return fetch('/api/settings').then(function(r){return r.json()})})
+   .then(function(s){applyAccess(s);flash('Saved.')})
+   .catch(function(e){flash(e.message,true)});
+ });
+ $('accessBtn').addEventListener('click',function(){
+  post('/api/app-command',{name:'request-accessibility'})
+   .then(function(){flash('Approve Chirp in System Settings, then come back.')})
+   .catch(function(e){flash(e.message,true)});
+ });
+ // The grant happens outside this page, so poll for it rather than making
+ // the user reload to see the row disappear.
+ setInterval(function(){
+  fetch('/api/settings').then(function(r){return r.json()}).then(applyAccess).catch(function(){});
+ },3000);
  function saveTelemetry(on){
   analyticsBox.checked=on;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},

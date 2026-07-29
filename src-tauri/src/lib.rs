@@ -68,6 +68,69 @@ fn config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
         .map(|h| h.join(".chirp").join("config.json"))
 }
 
+// Synthesising the copy that captures the selection needs Accessibility on
+// macOS. Without it the hotkey silently does nothing, which is the worst way
+// for a hotkey to fail — so the state is reported to the server and Settings
+// says so out loud.
+#[cfg(target_os = "macos")]
+fn accessibility_ok() -> bool {
+    macos_accessibility_client::accessibility::application_is_trusted()
+}
+#[cfg(not(target_os = "macos"))]
+fn accessibility_ok() -> bool {
+    true
+}
+
+fn report_native_status(ok: bool) {
+    std::thread::spawn(move || {
+        let _ = ureq::post(format!("{}/api/native-status", base_url()))
+            .send_json(serde_json::json!({"accessibilityOk": ok}));
+    });
+}
+
+fn handle_command(name: &str) {
+    match name {
+        "request-accessibility" => {
+            #[cfg(target_os = "macos")]
+            {
+                // Shows the system prompt with its "Open System Settings"
+                // button. Returns the state at the moment of asking, so the
+                // watcher below is what actually notices the grant.
+                let ok =
+                    macos_accessibility_client::accessibility::application_is_trusted_with_prompt();
+                report_native_status(ok);
+            }
+        }
+        "open-accessibility-settings" => {
+            #[cfg(target_os = "macos")]
+            {
+                let _ = std::process::Command::new("open")
+                    .arg("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+                    .spawn();
+            }
+        }
+        _ => {}
+    }
+}
+
+// The grant can be given while we are running, so notice it rather than
+// making the user restart the app to pick it up.
+fn watch_accessibility() {
+    std::thread::spawn(|| {
+        let mut last = accessibility_ok();
+        report_native_status(last);
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            let now = accessibility_ok();
+            if now != last {
+                last = now;
+                eprintln!("chirp: accessibility permission is now {now}");
+                report_native_status(now);
+            }
+        }
+    });
+}
+
 // Block until the TTS server answers (or ~10s elapse) so the window never
 // loads before the server listens.
 fn wait_for_server() {
@@ -209,9 +272,11 @@ pub fn run() {
 
             wait_for_server();
 
-            events::listen(app.handle().clone(), base_url(), |_app, event| {
-                eprintln!("chirp: event {event:?}");
+            events::listen(app.handle().clone(), base_url(), |_app, event| match event {
+                events::Event::Command(name) => handle_command(&name),
+                _ => {}
             });
+            watch_accessibility();
 
             let window = WebviewWindowBuilder::new(
                 app,
