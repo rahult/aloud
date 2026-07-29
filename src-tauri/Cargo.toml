@@ -1,6 +1,6 @@
 [package]
 name = "chirp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local neural text-to-speech as a menu-bar desktop app"
 authors = ["Chirp contributors"]
 edition = "2021"
