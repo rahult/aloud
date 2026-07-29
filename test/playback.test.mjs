@@ -34,6 +34,31 @@ function fakePlayer() {
   return p;
 }
 
+// A player that can really pause, like rodio — as opposed to afplay, which
+// can only be killed.
+function fakePausingPlayer() {
+  const p = fakePlayer();
+  p.supportsPause = true;
+  p.pauses = 0;
+  p.resumes = 0;
+  const basePlay = p.play;
+  p.play = (wav, onEnd) => {
+    const h = basePlay(wav, onEnd);
+    return {
+      stop: h.stop,
+      pause() { p.pauses++; },
+      resume() { p.resumes++; },
+    };
+  };
+  return p;
+}
+
+const buildPausing = () => {
+  const engine = fakeEngine();
+  const player = fakePausingPlayer();
+  return {engine, player, session: createSession({engine, player})};
+};
+
 const build = engineOpts => {
   const engine = fakeEngine(engineOpts);
   const player = fakePlayer();
@@ -264,4 +289,96 @@ test('togglePause suspends and resumes but never starts a session', async () => 
   assert.equal(session.getState().state, 'paused');
   assert.equal(session.togglePause(), 'resumed');
   assert.equal(session.getState().state, 'speaking');
+});
+
+// --- Phase 3: a player that can really pause ---
+
+test('a pausing player is paused, not killed', async () => {
+  const {session, player} = buildPausing();
+  session.start('one|two', {voice: 'af_heart', speed: 1});
+  await settle();
+  session.pause();
+  assert.equal(session.getState().state, 'paused');
+  assert.equal(player.pauses, 1);
+  assert.equal(player.stops, 0, 'must not kill audio it can pause');
+});
+
+test('resuming a pausing player does not replay the sentence', async () => {
+  const {session, player} = buildPausing();
+  session.start('one|two', {voice: 'af_heart', speed: 1});
+  await settle();
+  session.pause();
+  session.resume();
+  await settle();
+  assert.equal(session.getState().state, 'speaking');
+  assert.equal(player.resumes, 1);
+  assert.deepEqual(player.played, ['one'], 'sentence must not start over');
+});
+
+// The UI derives progress from startedAt, so a real pause has to move it.
+test('startedAt is rebased across a pause so progress stays correct', async () => {
+  const {session} = buildPausing();
+  session.start('one', {voice: 'af_heart', speed: 1});
+  await settle();
+  const before = session.getState().startedAt;
+  session.pause();
+  await new Promise(r => setTimeout(r, 40));
+  session.resume();
+  await settle();
+  const after = session.getState().startedAt;
+  assert.ok(after >= before + 30, `startedAt moved forward by the paused time (${before} -> ${after})`);
+});
+
+test('a non-pausing player keeps the kill-and-replay behaviour', async () => {
+  const {session, player} = build();
+  session.start('one|two', {voice: 'af_heart', speed: 1});
+  await settle();
+  session.pause();
+  assert.equal(player.stops, 1);
+  session.resume();
+  await settle();
+  assert.deepEqual(player.played, ['one', 'one'], 'replays, as afplay must');
+});
+
+test('restartCurrent replays the current sentence without moving the index', async () => {
+  const {session, player} = build();
+  session.start('one|two|three', {voice: 'af_heart', speed: 1});
+  await settle();
+  session.next();
+  await settle();
+  session.restartCurrent();
+  await settle();
+  assert.equal(session.getState().index, 1);
+  assert.deepEqual(player.played, ['one', 'two', 'two']);
+});
+
+test('restartCurrent does nothing when idle', async () => {
+  const {session, player} = build();
+  session.restartCurrent();
+  await settle();
+  assert.deepEqual(player.played, []);
+});
+
+test('an audio failure is reported and skipped', async () => {
+  const {session, player} = build();
+  const faults = [];
+  session.on('fault', f => faults.push(f));
+  session.start('one|two', {voice: 'af_heart', speed: 1});
+  await settle();
+  player.current.onEnd('device went away');
+  await settle();
+  assert.equal(faults.length, 1);
+  assert.equal(faults[0].scope, 'audio');
+  assert.equal(session.getState().index, 1, 'still advances past the bad sentence');
+});
+
+test('three consecutive audio failures stop the session', async () => {
+  const {session, player} = build();
+  session.start('a|b|c|d', {voice: 'af_heart', speed: 1});
+  await settle();
+  for (let i = 0; i < 3 && player.current; i++) {
+    player.current.onEnd('boom');
+    await settle();
+  }
+  assert.equal(session.getState().state, 'idle');
 });

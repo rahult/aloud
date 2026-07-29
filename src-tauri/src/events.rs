@@ -24,6 +24,7 @@ pub enum Event {
     Playback(PlaybackState),
     Sentences(Vec<String>),
     Command(String),
+    Audio(serde_json::Value),
 }
 
 #[derive(Deserialize)]
@@ -48,6 +49,9 @@ pub fn parse_frame(event: &str, payload: &str) -> Option<Event> {
         "sentences" => serde_json::from_str::<SentencesFrame>(payload)
             .ok()
             .map(|f| Event::Sentences(f.sentences)),
+        "audio" => serde_json::from_str::<serde_json::Value>(payload)
+            .ok()
+            .map(Event::Audio),
         "command" => serde_json::from_str::<CommandFrame>(payload)
             .ok()
             .filter(|f| !f.name.is_empty())
@@ -79,7 +83,7 @@ where
     F: Fn(&tauri::AppHandle, Event),
 {
     use std::io::BufRead;
-    let res = ureq::get(format!("{base_url}/api/playback/events")).call()?;
+    let res = ureq::get(format!("{base_url}/api/playback/events?client=app")).call()?;
     let reader = std::io::BufReader::new(res.into_body().into_reader());
 
     let mut event = String::new();
@@ -139,6 +143,15 @@ mod tests {
             panic!("expected a command")
         };
         assert_eq!(name, "request-accessibility");
+    }
+
+    #[test]
+    fn parses_an_audio_frame() {
+        let f = parse_frame("audio", r#"{"action":"play","id":3}"#);
+        let Some(Event::Audio(v)) = f else {
+            panic!("expected an audio event")
+        };
+        assert_eq!(v.get("action").unwrap(), "play");
     }
 
     #[test]

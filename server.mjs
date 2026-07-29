@@ -17,22 +17,40 @@
 //   GET  /                                             → web UI
 
 import http from 'node:http';
+import {EventEmitter} from 'node:events';
 import * as config from './src/config.mjs';
 import * as voices from './src/voices.mjs';
 import * as tts from './src/tts.mjs';
 import * as player from './src/player.mjs';
 import {createSession} from './src/playback.mjs';
+import {createRemotePlayer, createPlayerRouter} from './src/remote-player.mjs';
 import {createRoutes} from './src/routes.mjs';
 
 const stored = config.read();
 const PORT = Number(process.env.CHIRP_PORT ?? stored.port ?? config.DEFAULTS.port);
 
-const session = createSession({engine: tts, player});
+// Audio output can live in this process (afplay and friends) or inside the
+// desktop app (rodio, which can really pause and owns the audio session).
+// The session neither knows nor cares which it is talking to.
+const sseBus = new EventEmitter();
+const remote = createRemotePlayer({
+  send: cmd => sseBus.emit('audio', cmd),
+  wavDurationMs: player.wavDurationMs,
+});
+const appClients = {count: 0};
+const routedPlayer = createPlayerRouter({
+  local: player,
+  remote,
+  isAppConnected: () => appClients.count > 0,
+});
+
+const session = createSession({engine: tts, player: routedPlayer});
 const audioOut = player.available();
-if (!audioOut) console.warn('chirp: no system audio player found — /api/speak will not be audible');
+if (!audioOut) console.warn('chirp: no system audio player found — /api/speak needs the desktop app to be audible');
 
 const server = http.createServer(createRoutes({
-  session, tts, voices, config, player, activePort: PORT, audioOut,
+  session, tts, voices, config, player, remote, appClients, sseBus,
+  activePort: PORT, audioOut,
 }));
 
 server.listen(PORT, '127.0.0.1', () => {

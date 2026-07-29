@@ -20,6 +20,7 @@ serde_json = "1"
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 # Synthetic Cmd/Ctrl+C for capturing the selection. Cross-platform.
 enigo = "0.6"
+rodio = { version = "0.22", default-features = false, features = ["playback", "wav"] }
 
 # Accessibility permission, the Services menu, and Now Playing are macOS-only;
 # gating them keeps the Windows and Linux release builds from pulling ObjC.

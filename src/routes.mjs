@@ -8,6 +8,7 @@ const MAX_TTS_CHARS = 2000;
 
 export function createRoutes({
   session, tts, voices, config, player,
+  remote, appClients = {count: 0}, sseBus,
   configFile = config.CONFIG_PATH,
   activePort,
   audioOut = player.available(),
@@ -54,11 +55,14 @@ export function createRoutes({
   // Warm-up progress and load failures reach the UI the same way state does,
   // so the status dot can tell the truth during the first ~90 MB download.
   tts.events?.on('model', m => push('model', m));
+  // Audio commands ride the same feed as everything else; a browser client
+  // simply has no listener for them.
+  sseBus?.on('audio', cmd => push('audio', cmd));
 
   const heartbeat = setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 15_000);
   heartbeat.unref();
 
-  function events(req, res) {
+  function events(req, res, url) {
     res.writeHead(200, {
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -66,6 +70,10 @@ export function createRoutes({
       'Access-Control-Allow-Origin': '*',
     });
     clients.add(res);
+    // The desktop app identifies itself so the session knows it has somewhere
+    // better than afplay to send audio.
+    const isApp = url?.searchParams.get('client') === 'app';
+    if (isApp) appClients.count++;
     // Open with the current truth so a client that connects mid-session
     // renders correctly instead of waiting for the next transition.
     res.write(`event: sentences\ndata: ${JSON.stringify({
@@ -73,7 +81,14 @@ export function createRoutes({
     })}\n\n`);
     res.write(`event: state\ndata: ${JSON.stringify(session.getState())}\n\n`);
     res.write(`event: model\ndata: ${JSON.stringify({loaded: tts.isLoaded()})}\n\n`);
-    req.on('close', () => clients.delete(res));
+    req.on('close', () => {
+      clients.delete(res);
+      if (!isApp) return;
+      appClients.count = Math.max(0, appClients.count - 1);
+      // The app was the output device; without it the current sentence has
+      // nowhere to go, so restart it on the local player.
+      if (appClients.count === 0) session.restartCurrent();
+    });
   }
 
   // --- speech ---
@@ -150,13 +165,29 @@ export function createRoutes({
 
     if (GET && p === '/api/playback')
       return send(res, 200, {...session.getState(), sentences: session.getSentences()});
-    if (GET && p === '/api/playback/events') return events(req, res);
+    if (GET && p === '/api/playback/events') return events(req, res, url);
     if (POST && p === '/api/playback/toggle')
       return send(res, 200, {action: session.toggle(), ...session.getState()});
     if (POST && p.startsWith('/api/playback/')) {
       const action = TRANSPORT[p.slice('/api/playback/'.length)];
       if (action) { session[action](); return send(res, 200, session.getState()); }
     }
+    // The desktop app fetches the audio it was told to play, and says when
+    // the track drained. Ids let a report from a superseded sentence be
+    // recognised and ignored.
+    if (GET && p.startsWith('/api/audio/')) {
+      const wav = remote?.take(Number(p.slice('/api/audio/'.length)));
+      if (!wav) return send(res, 404, {error: 'No such audio.'});
+      return send(res, 200, wav);
+    }
+    if (POST && /^\/api\/audio\/\d+\/ended$/.test(p)) {
+      const id = Number(p.split('/')[3]);
+      return readBody(req).then(body => {
+        const acted = remote?.reportEnded(id, body.error);
+        send(res, acted ? 200 : 404, acted ? {ok: true} : {error: 'Not waiting on that audio.'});
+      }).catch(e => send(res, 400, {error: e.message}));
+    }
+
     // Retained: the previous API stopped playback here.
     if (POST && p === '/api/stop') { session.stop(); return send(res, 200, {stopped: true}); }
 

@@ -41,6 +41,10 @@ export function wavDurationMs(wav) {
   return Math.round((dataBytes / bytesPerSecond) * 1000);
 }
 
+// afplay, aplay and PowerShell cannot pause a running file — only be killed.
+// The session checks this before reaching for pause().
+export const supportsPause = false;
+
 export function play(wav, onEnd) {
   const file = path.join(os.tmpdir(), `chirp-${process.pid}-${counter++}.wav`);
   fs.writeFileSync(file, wav);
@@ -65,5 +69,9 @@ export function play(wav, onEnd) {
       child.kill('SIGTERM');
       done();
     },
+    // Present so both players share one shape; never called while
+    // supportsPause is false.
+    pause() {},
+    resume() {},
   };
 }

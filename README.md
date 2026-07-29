@@ -119,11 +119,10 @@ else to install:
   `http://127.0.0.1:8789/` in a small window; closing the window just hides
   it. **Quit** exits the app.
 
-### Known limitations
+- **Now Playing** shows the sentence being read and the voice, with transport
+  controls, because the app plays audio in its own process.
 
-Two macOS integrations are implemented but do **not** currently work. They are
-left in the tree because the diagnosis is worth keeping, not because they are
-expected to start working on their own.
+### Known limitations
 
 - **The "Speak with Chirp" Services menu entry never appears.** The
   `NSServices` declaration does reach the bundle and does register with the
@@ -132,17 +131,15 @@ expected to start working on their own.
   `ActivationPolicy::Accessory` at runtime to stay out of the Dock, and macOS
   does not surface Services from background-only apps. Fixing it probably
   means giving up the accessory policy, which is a worse trade.
-- **Now Playing and media keys are unverified.** The handlers are wired to
-  `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`, but macOS attributes
-  Now Playing to the process that owns the audio session — and Chirp's audio
-  comes from `afplay`, a separate process the server spawns. Making this work
-  would mean playing audio in-process, which would also allow true
-  mid-sentence pause. That is a change to where playback lives, not a fix to
-  this code.
+- **Media-key control is unverified.** The Now Playing widget renders and its
+  handlers are wired to `MPRemoteCommandCenter`, but nobody has confirmed that
+  pressing a keyboard or headphone media key actually reaches Chirp.
 
-Because the OS players cannot pause a running file, **pause is
-sentence-granular**: resuming replays the sentence you paused on rather than
-continuing mid-word.
+**Pause depends on where audio is playing.** With the desktop app running,
+audio plays inside the app and pause stops mid-word, resuming from that point.
+Running `npm start` on its own falls back to the system player (`afplay`,
+`aplay`, PowerShell), which cannot pause a running file — there, pausing stops
+between sentences and resuming replays the current one.
 
 Download the latest build for your platform from
 [GitHub releases](https://github.com/rahult/chirp/releases). The first TTS
