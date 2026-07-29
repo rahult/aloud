@@ -11,8 +11,14 @@
       <string>speakWithChirp</string>
       <key>NSPortName</key>
       <string>Chirp</string>
+      <!-- Modern macOS filters the Services menu by UTI; the legacy
+           NSStringPboardType name alone registers but never appears. -->
       <key>NSSendTypes</key>
-      <array><string>NSStringPboardType</string></array>
+      <array>
+        <string>public.utf8-plain-text</string>
+        <string>public.plain-text</string>
+        <string>NSStringPboardType</string>
+      </array>
     </dict>
   </array>
 </dict>
