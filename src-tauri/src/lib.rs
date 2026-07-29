@@ -72,6 +72,7 @@ fn wait_for_server() {
 
 // Hotkey: stop playback if speaking, else speak the clipboard.
 fn toggle_speak(app: &tauri::AppHandle) {
+    eprintln!("chirp: hotkey pressed");
     if PLAYING.swap(false, Ordering::SeqCst) {
         std::thread::spawn(|| {
             let _ = ureq::post(format!("{}/api/stop", base_url())).send_empty();
@@ -129,7 +130,7 @@ fn watch_config(app: tauri::AppHandle, path: PathBuf, mut current: Shortcut) {
             }
             let _ = app.global_shortcut().unregister(current);
             if register_hotkey(&app, new).is_ok() {
-                println!("chirp: hotkey updated to {hotkey}");
+                eprintln!("chirp: hotkey updated to {hotkey}");
                 current = new;
             } else {
                 let _ = register_hotkey(&app, current);
@@ -238,7 +239,14 @@ pub fn run() {
             let shortcut: Shortcut = hotkey
                 .parse()
                 .unwrap_or_else(|_| DEFAULT_HOTKEY.parse().expect("valid default shortcut"));
-            register_hotkey(app.handle(), shortcut)?;
+            // A conflicting registration (e.g. another app holds the combo)
+            // must not take down the whole app — the user can pick another
+            // combo in Settings and the watcher applies it live.
+            if let Err(e) = register_hotkey(app.handle(), shortcut) {
+                eprintln!("chirp: could not register hotkey {hotkey}: {e}");
+            } else {
+                eprintln!("chirp: hotkey registered: {hotkey}");
+            }
             if let Some(path) = cfg_path {
                 watch_config(app.handle().clone(), path, shortcut);
             }
@@ -246,6 +254,16 @@ pub fn run() {
             check_for_updates(app.handle().clone());
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Chirp");
+        .build(tauri::generate_context!())
+        .expect("error while building Chirp")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Reap the node sidecar so it never outlives the app.
+                if let Some(backend) = app.try_state::<Backend>() {
+                    if let Some(child) = backend.0.lock().unwrap().take() {
+                        let _ = child.kill();
+                    }
+                }
+            }
+        });
 }

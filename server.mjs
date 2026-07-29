@@ -231,6 +231,8 @@ const PAGE = `<!doctype html>
  .text{background:var(--bg);border:1px solid var(--hairline);border-radius:8px;color:var(--ink);padding:7px 10px;font:13.5px var(--sans);width:100%;max-width:220px;transition:border-color .2s}
  .text:focus{outline:none;border-color:var(--amber-deep)}
  .note{font-size:11.5px;color:var(--amber);text-align:right;white-space:nowrap}
+ .notebtn{background:none;border:none;padding:2px 0;color:var(--faint);font-size:12px;text-decoration:underline;text-underline-offset:3px;justify-self:end}
+ .notebtn:hover{color:var(--ink)}
  .smsg{font-size:12.5px;color:var(--faint);min-height:1.2em}
  .smsg.err{color:var(--err)}
  input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;width:100%;height:24px;cursor:pointer}
@@ -336,8 +338,8 @@ const PAGE = `<!doctype html>
    </div>
    <div class="setting">
     <label for="hotkey">Hotkey</label>
-    <input type="text" class="text" id="hotkey" autocomplete="off" spellcheck="false">
-    <span class="note"></span>
+    <input type="text" class="text" id="hotkey" autocomplete="off" spellcheck="false" placeholder="Click, then press the combo">
+    <button class="notebtn" id="hotkeyTest">Test</button>
    </div>
    <div class="setting">
     <label for="analytics">Analytics</label>
@@ -406,7 +408,11 @@ const PAGE = `<!doctype html>
  function track(ev,params){if(analyticsOn&&window.gtag)gtag('event',ev,params)}
 
  fetch('/api/settings').then(function(r){return r.json()}).then(function(s){
-  portIn.value=s.port;hotkeyIn.value=s.hotkey;
+  portIn.value=s.port;
+  // Empty field = default in effect; the default shows as placeholder so the
+  // box can actually be cleared and re-captured.
+  if(s.hotkeyCustom)hotkeyIn.value=s.hotkey;
+  else hotkeyIn.placeholder=s.hotkey+' (default)';
   analyticsBox.checked=!!s.telemetry;
   if(s.telemetry===null||s.telemetry===undefined)consent.hidden=false;
   if(s.telemetry)loadAnalytics();
@@ -426,14 +432,50 @@ const PAGE = `<!doctype html>
    body:JSON.stringify({port:portIn.value.trim(),hotkey:hotkeyIn.value.trim()})})
   .then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d})})
   .then(function(s){
-   portIn.value=s.port;hotkeyIn.value=s.hotkey;
+   portIn.value=s.port;
+   if(!hotkeyIn.value)hotkeyIn.placeholder=s.hotkey+' (default)';
    portNote.textContent=s.restartRequired?'after restart':'';
    flash(s.restartRequired?'Saved — restart Chirp to use the new port.':'Saved.');
   })
   .catch(function(e){flash(e.message,true)});
  }
  portIn.addEventListener('change',saveSettings);
+ // Press-to-set: capture the physical combo in accelerator form.
+ // Backspace/Delete clears (back to default), Tab moves focus, Escape blurs.
+ hotkeyIn.addEventListener('keydown',function(e){
+  if(e.key==='Tab')return;
+  e.preventDefault();
+  if(['Meta','Control','Alt','Shift'].indexOf(e.key)>=0)return;
+  if(e.key==='Escape'){hotkeyIn.blur();return}
+  if(e.key==='Backspace'||e.key==='Delete'){hotkeyIn.value='';saveSettings();return}
+  if(!(e.metaKey||e.ctrlKey||e.altKey))return flash('Add a modifier — Cmd, Ctrl, or Alt.',true);
+  var parts=[];
+  if(e.metaKey)parts.push('CmdOrCtrl');
+  if(e.ctrlKey)parts.push('Ctrl');
+  if(e.altKey)parts.push('Alt');
+  if(e.shiftKey)parts.push('Shift');
+  var k=e.key===' '?'Space':e.key.replace(/^Arrow/,'');
+  parts.push(k.length===1?k.toUpperCase():k);
+  hotkeyIn.value=parts.join('+');
+  saveSettings();
+ });
  hotkeyIn.addEventListener('change',saveSettings);
+ // Test the hotkey's action: speak the clipboard (or the textarea) through
+ // the same /api/speak path the global hotkey uses.
+ $('hotkeyTest').addEventListener('click',function(){
+  var speakSample=function(text){
+   text=(text||'').trim()||'Chirp hotkey test.';
+   flash('Speaking\\u2026');
+   fetch('/api/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})})
+   .then(function(r){return r.json().then(function(d){
+    if(!r.ok)throw new Error(d.error||('HTTP '+r.status));
+    flash('Played. Now press your combo anywhere to test the hotkey itself.');
+   })})
+   .catch(function(e){flash(e.message,true)});
+  };
+  if(navigator.clipboard&&navigator.clipboard.readText)navigator.clipboard.readText().then(speakSample,function(){speakSample(t.value)});
+  else speakSample(t.value);
+ });
 
  speed.value=localStorage.getItem('chirp.speed')||DEF_SPEED;
  showSpeed();updateCount();
@@ -584,7 +626,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/stop') return send(res, 200, {stopped: stopPlayback()});
   if (req.method === 'GET' && url.pathname === '/api/settings') {
     const cfg = loadConfig();
-    return send(res, 200, {port: cfg.port ?? DEFAULT_PORT, hotkey: cfg.hotkey ?? DEFAULT_HOTKEY, activePort: PORT, telemetry: cfg.telemetry ?? null});
+    return send(res, 200, {port: cfg.port ?? DEFAULT_PORT, hotkey: cfg.hotkey ?? DEFAULT_HOTKEY, activePort: PORT, telemetry: cfg.telemetry ?? null, hotkeyCustom: cfg.hotkey != null});
   }
   if (req.method === 'POST' && url.pathname === '/api/settings') return handleSettings(req, res);
   if (req.method === 'GET' && url.pathname === '/') return send(res, 200, PAGE, {'Content-Type': 'text/html; charset=utf-8'});
