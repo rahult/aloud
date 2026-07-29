@@ -1,10 +1,10 @@
 mod events;
+mod selection;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
@@ -52,6 +52,22 @@ fn configured_hotkey(path: &Path) -> String {
         .unwrap_or_else(|| DEFAULT_HOTKEY.to_string())
 }
 
+// Read fresh on every press rather than cached at startup, so switching the
+// mode in Settings takes effect immediately.
+fn configured_input(path: Option<&Path>) -> String {
+    path.and_then(|p| config_value(p, "input"))
+        .and_then(|v| v.as_str().map(str::to_string))
+        .filter(|s| s == "clipboard" || s == "selection")
+        .unwrap_or_else(|| "selection".to_string())
+}
+
+fn config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    app.path()
+        .home_dir()
+        .ok()
+        .map(|h| h.join(".chirp").join("config.json"))
+}
+
 // Block until the TTS server answers (or ~10s elapse) so the window never
 // loads before the server listens.
 fn wait_for_server() {
@@ -68,8 +84,8 @@ fn wait_for_server() {
 
 // Hotkey: ask the server what to do. It is the only thing that knows whether
 // audio is playing, so it decides — and only tells us to fetch text when it
-// actually needs some. Reading the clipboard is cheap, but capturing a
-// selection (Phase 2) will not be, so the "need_text" round trip stays.
+// actually needs some. That round trip matters: capturing the selection has
+// side effects (a synthesised copy), so it must not happen speculatively.
 //
 // This replaces a local AtomicBool that went stale whenever audio finished on
 // its own, which spent the next hotkey press on a no-op stop.
@@ -87,13 +103,11 @@ fn toggle_speak(app: &tauri::AppHandle) {
         if body.get("action").and_then(|v| v.as_str()) != Some("need_text") {
             return;
         }
-        let Ok(text) = app.clipboard().read_text() else {
+        let mode = configured_input(config_path(&app).as_deref());
+        let Some(text) = selection::capture(&app, &mode) else {
+            eprintln!("chirp: nothing selected and nothing on the clipboard");
             return;
         };
-        let text = text.trim().to_string();
-        if text.is_empty() {
-            return;
-        }
         let _ = ureq::post(format!("{}/api/speak", base_url()))
             .send_json(serde_json::json!({"text": text}));
     });
