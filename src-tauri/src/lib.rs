@@ -1,6 +1,8 @@
 mod events;
 mod selection;
 mod tray;
+#[cfg(target_os = "macos")]
+mod services;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -17,7 +19,7 @@ const DEFAULT_HOTKEY: &str = "CmdOrCtrl+Shift+Space";
 // bind; the hotkey is re-registered live by watch_config().
 static PORT: OnceLock<u16> = OnceLock::new();
 
-fn base_url() -> String {
+pub(crate) fn base_url() -> String {
     format!(
         "http://127.0.0.1:{}",
         PORT.get().copied().unwrap_or(DEFAULT_PORT)
@@ -373,6 +375,9 @@ pub fn run() {
             if let Some(path) = cfg_path {
                 watch_config(app.handle().clone(), path, shortcut);
             }
+
+            #[cfg(target_os = "macos")]
+            services::register();
 
             check_for_updates(app.handle().clone());
             Ok(())
