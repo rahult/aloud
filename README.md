@@ -64,6 +64,10 @@ server — same `POST /api/tts` contract, plus optional per-request `voice`.
   first download.
 - Requires Node.js ≥ 20.11. Everything runs on CPU; a request takes a second or
   two for a sentence.
+- The app offers **opt-in** anonymous usage analytics (Google Analytics) on
+  first run — counts and voice ids only, never text. Decline and nothing is
+  ever sent; change your mind anytime in Settings. The product site
+  (chirp.rahultrikha.com) uses its own analytics tag.
 
 ## Desktop app
 

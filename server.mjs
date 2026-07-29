@@ -168,9 +168,14 @@ function handleSettings(req, res) {
         cfg.hotkey = h;
       }
     }
+    // Analytics consent: true/false, absent until the user chooses (opt-in).
+    if ('telemetry' in body) {
+      if (body.telemetry == null || body.telemetry === '') delete cfg.telemetry;
+      else cfg.telemetry = Boolean(body.telemetry);
+    }
     try { saveConfig(cfg); } catch (e) { return send(res, 500, {error: `Could not save settings: ${e.message}`}); }
     const port = cfg.port ?? DEFAULT_PORT;
-    send(res, 200, {ok: true, port, hotkey: cfg.hotkey ?? DEFAULT_HOTKEY, restartRequired: port !== PORT});
+    send(res, 200, {ok: true, port, hotkey: cfg.hotkey ?? DEFAULT_HOTKEY, restartRequired: port !== PORT, telemetry: cfg.telemetry ?? null});
   }).catch(e => send(res, 400, {error: e.message}));
 }
 
@@ -186,6 +191,7 @@ const PAGE = `<!doctype html>
   --ease:cubic-bezier(.22,1,.36,1)
  }
  *{box-sizing:border-box;margin:0}
+ [hidden]{display:none!important}
  body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);min-height:100vh;display:flex}
  aside{width:148px;flex:none;min-height:100vh;position:sticky;top:0;align-self:flex-start;display:flex;flex-direction:column;padding:22px 0 16px;border-right:1px solid var(--hairline)}
  .wordmark{padding:0 20px;font:400 1.35rem/1 var(--serif)}
@@ -236,6 +242,26 @@ const PAGE = `<!doctype html>
  .reset{background:none;border:none;padding:0;color:var(--faint);font-size:13px;text-decoration:underline;text-underline-offset:3px;justify-self:start}
  .reset:hover{color:var(--ink)}
  .hint{margin-top:34px;padding-top:16px;border-top:1px solid var(--hairline);color:var(--faint);font-size:12.5px;display:flex;justify-content:space-between;gap:10px 24px;flex-wrap:wrap}
+ .consent{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid var(--hairline);border-radius:12px;background:var(--raised);padding:14px 16px;margin-bottom:28px}
+ .consent p{font-size:13.5px;color:var(--soft);max-width:56ch}
+ .consent-actions{display:flex;gap:8px;flex:none}
+ .consent button{padding:7px 14px;font-size:13px}
+ .consent .primary{min-width:0}
+ .setting input[type=checkbox]{accent-color:var(--amber);width:15px;height:15px;justify-self:start;cursor:pointer}
+ .player{margin-top:22px;border-top:1px solid var(--hairline);padding-top:16px}
+ .pcontrols{display:flex;align-items:center;gap:8px}
+ .iconbtn{width:34px;height:34px;padding:0;display:grid;place-items:center;flex:none}
+ .iconbtn.primary{min-width:34px}
+ .iconbtn svg{width:14px;height:14px;fill:currentColor}
+ .track{flex:1;display:flex;gap:2px;height:34px;align-items:center;cursor:pointer;min-width:60px}
+ .seg{position:relative;height:3px;background:var(--hairline);border-radius:2px;flex:none}
+ .seg i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--amber)}
+ .rate{flex:none;min-width:54px;padding:8px 10px;font-variant-numeric:tabular-nums;text-align:center}
+ .transcript{margin-top:14px;font:400 1.02rem/1.75 var(--serif);color:var(--faint);max-height:200px;overflow-y:auto}
+ .transcript span{cursor:pointer;transition:color .15s}
+ .transcript span:hover{color:var(--soft)}
+ .transcript span.done{color:var(--soft)}
+ .transcript span.active{color:var(--amber)}
  kbd{border:1px solid var(--hairline);border-bottom-width:2px;border-radius:5px;background:var(--raised);padding:1px 6px;font:11.5px var(--sans);color:var(--soft)}
  code{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--raised);padding:1px 5px;border-radius:4px}
  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -258,9 +284,16 @@ const PAGE = `<!doctype html>
  <div class="status" id="status"><span class="dot"></span><span id="statusText">Warms up on first speak</span></div>
 </aside>
 <main>
+ <div class="consent" id="consent" hidden>
+  <p>Share anonymous usage analytics? Your text never leaves this machine — only counts like “spoke 120 characters”.</p>
+  <div class="consent-actions">
+   <button class="primary" id="consentYes">Allow</button>
+   <button id="consentNo">No thanks</button>
+  </div>
+ </div>
  <section id="view-voice">
   <h1>Type it. <em>Hear it.</em></h1>
-  <p class="sub">Neural text-to-speech on this machine — Kokoro-82M, fully on-device. Nothing leaves.</p>
+  <p class="sub">Neural text-to-speech on this machine — Kokoro-82M, fully on-device. Your text never leaves.</p>
   <div class="field">
    <textarea id="t" maxlength="${MAX_CHARS}" placeholder="Something worth hearing…" spellcheck="false">The quick brown fox jumps over the lazy dog.</textarea>
    <span class="count" id="count"></span>
@@ -271,6 +304,16 @@ const PAGE = `<!doctype html>
    <button id="dl" disabled>Download</button>
   </div>
   <p class="error" id="err" role="alert"></p>
+  <div class="player" id="player" hidden>
+   <div class="pcontrols">
+    <button class="iconbtn" id="prev" aria-label="Previous sentence"><svg viewBox="0 0 16 16"><path d="M3 3h2v10H3zM13 3v10L6 8z"/></svg></button>
+    <button class="iconbtn primary" id="play" aria-label="Play"><svg viewBox="0 0 16 16"><path d="M5 3v10l8-5z"/></svg></button>
+    <button class="iconbtn" id="next" aria-label="Next sentence"><svg viewBox="0 0 16 16"><path d="M11 3h2v10h-2zM3 3v10l7-5z"/></svg></button>
+    <div class="track" id="track" aria-hidden="true"></div>
+    <button class="rate" id="rate">1×</button>
+   </div>
+   <div class="transcript" id="transcript"></div>
+  </div>
   <div class="hint">
    <span><kbd>⌘</kbd> <kbd>↵</kbd> to speak</span>
    <span><code>POST /api/tts</code> · port ${PORT} · local only</span>
@@ -296,6 +339,11 @@ const PAGE = `<!doctype html>
     <input type="text" class="text" id="hotkey" autocomplete="off" spellcheck="false">
     <span class="note"></span>
    </div>
+   <div class="setting">
+    <label for="analytics">Analytics</label>
+    <input type="checkbox" id="analytics">
+    <span class="note" id="analyticsNote">anonymous</span>
+   </div>
    <p class="smsg" id="smsg"></p>
    <button class="reset" id="reset">Reset to defaults</button>
   </div>
@@ -305,9 +353,10 @@ const PAGE = `<!doctype html>
  var $=function(id){return document.getElementById(id)};
  var t=$('t'),sel=$('v'),speak=$('speak'),dl=$('dl'),err=$('err'),count=$('count'),
   speed=$('speed'),speedVal=$('speedVal'),status=$('status'),statusText=$('statusText'),
-  portIn=$('port'),hotkeyIn=$('hotkey'),portNote=$('portNote'),smsg=$('smsg'),smsgTimer=null;
+  portIn=$('port'),hotkeyIn=$('hotkey'),portNote=$('portNote'),smsg=$('smsg'),smsgTimer=null,
+  consent=$('consent'),analyticsBox=$('analytics');
  var MAX=${MAX_CHARS},DEF_VOICE='af_heart',DEF_SPEED=1;
- var audio=null,audioUrl=null;
+ var audio=null;
 
  var navs=document.querySelectorAll('.nav');
  function showView(name){
@@ -341,9 +390,37 @@ const PAGE = `<!doctype html>
   clearTimeout(smsgTimer);
   if(msg)smsgTimer=setTimeout(function(){smsg.textContent=''},4000);
  }
+ // Analytics (opt-in): gtag loads only after consent, and events carry
+ // counts and ids — never text. Offline, the script simply never arrives.
+ var GA_ID='G-M72NFQRWXN',analyticsOn=false,gaLoaded=false;
+ function loadAnalytics(){
+  if(gaLoaded)return;gaLoaded=true;analyticsOn=true;
+  var s=document.createElement('script');s.async=true;
+  s.src='https://www.googletagmanager.com/gtag/js?id='+GA_ID;
+  document.head.appendChild(s);
+  window.dataLayer=window.dataLayer||[];
+  window.gtag=function(){dataLayer.push(arguments)};
+  gtag('js',new Date());
+  gtag('config',GA_ID);
+ }
+ function track(ev,params){if(analyticsOn&&window.gtag)gtag('event',ev,params)}
+
  fetch('/api/settings').then(function(r){return r.json()}).then(function(s){
   portIn.value=s.port;hotkeyIn.value=s.hotkey;
+  analyticsBox.checked=!!s.telemetry;
+  if(s.telemetry===null||s.telemetry===undefined)consent.hidden=false;
+  if(s.telemetry)loadAnalytics();
  });
+ function saveTelemetry(on){
+  analyticsBox.checked=on;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({telemetry:on})})
+  .then(function(){if(on)loadAnalytics();else analyticsOn=false})
+  .catch(function(e){flash(e.message,true)});
+ }
+ $('consentYes').addEventListener('click',function(){consent.hidden=true;saveTelemetry(true);track('consent',{granted:true})});
+ $('consentNo').addEventListener('click',function(){consent.hidden=true;saveTelemetry(false)});
+ analyticsBox.addEventListener('change',function(){saveTelemetry(analyticsBox.checked)});
  function saveSettings(){
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({port:portIn.value.trim(),hotkey:hotkeyIn.value.trim()})})
@@ -363,38 +440,134 @@ const PAGE = `<!doctype html>
 
  sel.addEventListener('change',function(){localStorage.setItem('chirp.voice',sel.value)});
  speed.addEventListener('input',function(){showSpeed();localStorage.setItem('chirp.speed',speed.value)});
- t.addEventListener('input',updateCount);
+ t.addEventListener('input',function(){updateCount();session++;stopAudio();player.hidden=true;chunks=[];cur=-1});
  $('reset').addEventListener('click',function(){
   sel.value=DEF_VOICE;speed.value=DEF_SPEED;showSpeed();
   localStorage.removeItem('chirp.voice');localStorage.removeItem('chirp.speed');
   portIn.value='';hotkeyIn.value='';saveSettings();
  });
 
- function stopAudio(){if(audio){audio.pause();audio=null}speak.textContent='Speak'}
+ // Player: the text is the album, each sentence a track. Chunks are
+ // generated on demand (next one prefetched) and cached for the session.
+ var RATES=[0.75,1,1.25,1.5,2],rateIdx=1;
+ var chunks=[],urls={},promises={},cur=-1,playing=false,raf=0,session=0;
+ var player=$('player'),track=$('track'),transcript=$('transcript'),playBtn=$('play'),rateBtn=$('rate'),
+  playSvg=playBtn.querySelector('svg'),
+  PLAY='<path d="M5 3v10l8-5z"/>',PAUSE='<path d="M4 3h3v10H4zM9 3h3v10H9z"/>';
 
- speak.addEventListener('click',async function(){
+ function splitText(s){
+  var out=[],re=/[^.!?\\n]+[.!?]*(?:\\u201d|["')\\]])*\\s*|\\n+/g,m;
+  while((m=re.exec(s))){var c=m[0].replace(/\\s+/g,' ').trim();if(c)out.push(c)}
+  return out;
+ }
+
+ function fetchChunk(i){
+  if(urls[i])return Promise.resolve(urls[i]);
+  if(!promises[i]){
+   promises[i]=fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({text:chunks[i],voice:sel.value,speed:+speed.value})})
+   .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.error||('HTTP '+r.status))});return r.blob()})
+   .then(function(b){urls[i]=URL.createObjectURL(b);return urls[i]});
+  }
+  return promises[i];
+ }
+
+ function paint(){
+  var segs=track.children;
+  for(var i=0;i<segs.length;i++){
+   var f=0;
+   if(i<cur)f=100;
+   else if(i===cur&&audio&&audio.duration)f=Math.min(100,audio.currentTime/audio.duration*100);
+   segs[i].firstChild.style.width=f+'%';
+  }
+  var spans=transcript.children;
+  for(var j=0;j<spans.length;j++)spans[j].className=j<cur?'done':j===cur?'active':'';
+ }
+
+ function tick(){paint();raf=requestAnimationFrame(tick)}
+
+ function setPlayIcon(){playSvg.innerHTML=playing?PAUSE:PLAY;playBtn.setAttribute('aria-label',playing?'Pause':'Play')}
+
+ function stopAudio(){
+  if(audio){audio.pause();audio=null}
+  playing=false;cancelAnimationFrame(raf);setPlayIcon();
+ }
+
+ function playChunk(i){
+  if(i<0||i>=chunks.length)return;
+  var s=session;
+  cur=i;
+  if(audio){audio.pause();audio=null}
+  playing=false;cancelAnimationFrame(raf);paint();
+  playBtn.disabled=true;
+  fetchChunk(i).then(function(u){
+   if(s!==session||cur!==i)return;
+   audio=new Audio(u);audio.playbackRate=RATES[rateIdx];
+   audio.onended=function(){
+    if(s!==session)return;
+    if(cur<chunks.length-1)playChunk(cur+1);
+    else{cur=chunks.length;stopAudio();paint()}
+   };
+   playBtn.disabled=false;playing=true;setPlayIcon();setReady();
+   tick();
+   audio.play().catch(function(){});
+   var active=transcript.children[i];if(active)active.scrollIntoView({block:'nearest'});
+   if(i+1<chunks.length)fetchChunk(i+1);
+  }).catch(function(e){if(s===session){playBtn.disabled=false;fail(e.message)}});
+ }
+
+ playBtn.addEventListener('click',function(){
+  if(!chunks.length)return;
+  if(audio&&playing){audio.pause();playing=false;cancelAnimationFrame(raf);setPlayIcon()}
+  else if(audio){playing=true;setPlayIcon();tick();audio.play().catch(function(){})}
+  else playChunk(cur>=0&&cur<chunks.length?cur:0);
+ });
+ $('prev').addEventListener('click',function(){playChunk(cur>0?cur-1:0)});
+ $('next').addEventListener('click',function(){playChunk(cur+1)});
+ rateBtn.addEventListener('click',function(){
+  rateIdx=(rateIdx+1)%RATES.length;rateBtn.textContent=fmtSpeed(RATES[rateIdx]);
+  if(audio)audio.playbackRate=RATES[rateIdx];
+ });
+
+ speak.addEventListener('click',function(){
   err.style.display='none';
-  if(audio){stopAudio();return}
   var text=t.value.trim();
   if(!text)return fail('Type something first.');
+  session++;stopAudio();
+  chunks=splitText(text);
+  track('speak',{chars:text.length,voice:sel.value,sentences:chunks.length});
+  for(var u in urls)URL.revokeObjectURL(urls[u]);
+  urls={};promises={};cur=-1;
+  track.innerHTML='';transcript.innerHTML='';
+  var total=chunks.reduce(function(a,c){return a+c.length},0)||1;
+  chunks.forEach(function(c,i){
+   var seg=document.createElement('div');seg.className='seg';seg.style.width=(c.length/total*100)+'%';
+   seg.appendChild(document.createElement('i'));
+   seg.addEventListener('click',function(){playChunk(i)});
+   track.appendChild(seg);
+   var span=document.createElement('span');span.textContent=c+' ';
+   span.addEventListener('click',function(){playChunk(i)});
+   transcript.appendChild(span);
+  });
+  player.hidden=false;
   speak.disabled=true;speak.textContent='Generating\\u2026';dl.disabled=true;
-  try{
-   var r=await fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({text:text,voice:sel.value,speed:+speed.value})});
-   if(!r.ok)throw new Error((await r.json()).error||('HTTP '+r.status));
-   var blob=await r.blob();
-   if(audioUrl)URL.revokeObjectURL(audioUrl);
-   audioUrl=URL.createObjectURL(blob);
-   audio=new Audio(audioUrl);
-   audio.onended=stopAudio;
-   speak.disabled=false;speak.textContent='Stop';dl.disabled=false;
-   setReady();
-   audio.play().catch(function(){});
-  }catch(e){fail(e.message);speak.disabled=false;speak.textContent='Speak'}
+  fetchChunk(0)
+   .then(function(){speak.disabled=false;speak.textContent='Speak';dl.disabled=false;playChunk(0)})
+   .catch(function(e){speak.disabled=false;speak.textContent='Speak';fail(e.message)});
  });
  dl.addEventListener('click',function(){
-  if(!audioUrl)return;
-  var a=document.createElement('a');a.href=audioUrl;a.download='chirp.wav';a.click();
+  var text=t.value.trim();if(!text)return;
+  track('download',{chars:text.length});
+  dl.disabled=true;
+  fetch('/api/tts',{method:'POST',headers:{'Content-Type':'application/json'},
+   body:JSON.stringify({text:text,voice:sel.value,speed:+speed.value})})
+  .then(function(r){if(!r.ok)return r.json().then(function(d){throw new Error(d.error||('HTTP '+r.status))});return r.blob()})
+  .then(function(b){
+   var u=URL.createObjectURL(b),a=document.createElement('a');
+   a.href=u;a.download='chirp.wav';a.click();
+   setTimeout(function(){URL.revokeObjectURL(u)},5000);dl.disabled=false;
+  })
+  .catch(function(e){dl.disabled=false;fail(e.message)});
  });
  document.addEventListener('keydown',function(e){
   if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();speak.click()}
@@ -411,7 +584,7 @@ const server = http.createServer((req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/stop') return send(res, 200, {stopped: stopPlayback()});
   if (req.method === 'GET' && url.pathname === '/api/settings') {
     const cfg = loadConfig();
-    return send(res, 200, {port: cfg.port ?? DEFAULT_PORT, hotkey: cfg.hotkey ?? DEFAULT_HOTKEY, activePort: PORT});
+    return send(res, 200, {port: cfg.port ?? DEFAULT_PORT, hotkey: cfg.hotkey ?? DEFAULT_HOTKEY, activePort: PORT, telemetry: cfg.telemetry ?? null});
   }
   if (req.method === 'POST' && url.pathname === '/api/settings') return handleSettings(req, res);
   if (req.method === 'GET' && url.pathname === '/') return send(res, 200, PAGE, {'Content-Type': 'text/html; charset=utf-8'});
