@@ -6,6 +6,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import {EventEmitter} from 'node:events';
 import {createRoutes} from '../src/routes.mjs';
+import {createRemotePlayer, createPlayerRouter} from '../src/remote-player.mjs';
 import {createSession} from '../src/playback.mjs';
 import * as voices from '../src/voices.mjs';
 import * as config from '../src/config.mjs';
@@ -20,11 +21,17 @@ function harness() {
   };
   const player = {
     current: null,
+    supportsPause: false,
     wavDurationMs: () => 1000,
-    play(wav, onEnd) { player.current = {wav, onEnd}; return {stop() { player.current = null; }}; },
+    play(wav, onEnd) { player.current = {wav, onEnd}; return {stop() { player.current = null; }, pause() {}, resume() {}}; },
     finish() { const c = player.current; player.current = null; c.onEnd(); },
+    available: () => true,
   };
-  const session = createSession({engine, player});
+  const sseBus = new EventEmitter();
+  const remote = createRemotePlayer({send: c => sseBus.emit('audio', c), wavDurationMs: player.wavDurationMs});
+  const appClients = {count: 0};
+  const routed = createPlayerRouter({local: player, remote, isAppConnected: () => appClients.count > 0});
+  const session = createSession({engine, player: routed});
   const tts = {
     split: engine.split,
     generate: engine.generate,
@@ -33,12 +40,12 @@ function harness() {
     events: new EventEmitter(),
   };
   const server = http.createServer(createRoutes({
-    session, tts, voices, config, player,
+    session, tts, voices, config, player, remote, appClients, sseBus,
     configFile: cfgFile,
     activePort: 8789,
     audioOut: true,
   }));
-  return {server, session, player, cfgFile};
+  return {server, session, player, remote, appClients, cfgFile};
 }
 
 const stop = server => { server.closeAllConnections(); server.close(); };
@@ -280,4 +287,69 @@ test('settings expose the input mode', async t => {
   assert.equal((await call(port, 'GET', '/api/settings')).body.input, 'selection');
   await call(port, 'POST', '/api/settings', {input: 'clipboard'});
   assert.equal((await call(port, 'GET', '/api/settings')).body.input, 'clipboard');
+});
+
+// --- Phase 3: audio handed to the desktop app ---
+
+test('audio parked by the remote player is served, then gone', async t => {
+  const {server, remote} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  // Each harness gets a fresh remote player, so the first id is 1.
+  remote.play(Buffer.from('RIFFfake'), () => {});
+  const res = await fetch(`http://127.0.0.1:${port}/api/audio/1`);
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type'), /audio\/wav/);
+  assert.equal(Buffer.from(await res.arrayBuffer()).toString(), 'RIFFfake');
+});
+
+test('an unknown audio id is a 404', async t => {
+  const {server} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  assert.equal((await call(port, 'GET', '/api/audio/999')).status, 404);
+});
+
+test('reporting a track ended advances the session', async t => {
+  const {server, session, appClients} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  appClients.count = 1;                       // pretend the desktop app is attached
+  await call(port, 'POST', '/api/speak', {text: 'one|two'});
+  await settle();
+  assert.equal(session.getState().index, 0);
+  const ended = await call(port, 'POST', '/api/audio/1/ended', {});
+  assert.equal(ended.status, 200);
+  await settle();
+  assert.equal(session.getState().index, 1);
+});
+
+test('a report for a track we are not waiting on is a 404', async t => {
+  const {server} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  assert.equal((await call(port, 'POST', '/api/audio/42/ended', {})).status, 404);
+});
+
+test('an app client is counted while its feed is open', async t => {
+  const {server, appClients} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  assert.equal(appClients.count, 0);
+  const res = await fetch(`http://127.0.0.1:${port}/api/playback/events?client=app`);
+  const reader = res.body.getReader();
+  await readFrame(reader);
+  assert.equal(appClients.count, 1);
+  await reader.cancel();
+});
+
+test('a browser client is not counted as an app', async t => {
+  const {server, appClients} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  const res = await fetch(`http://127.0.0.1:${port}/api/playback/events`);
+  const reader = res.body.getReader();
+  await readFrame(reader);
+  assert.equal(appClients.count, 0);
+  await reader.cancel();
 });
