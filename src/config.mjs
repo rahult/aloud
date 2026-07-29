@@ -13,6 +13,11 @@ export const DEFAULTS = Object.freeze({
   hotkey: 'CmdOrCtrl+Shift+Space',
   voice: 'af_heart',
   speed: 1,
+  // What the global hotkey reads. 'selection' captures whatever is
+  // highlighted without disturbing the clipboard; 'clipboard' is the old
+  // behaviour, for anyone who prefers the explicit copy.
+  input: 'selection',
+  nowPlaying: true,
 });
 
 // Accelerator-style hotkey: modifiers then one key, e.g. CmdOrCtrl+Shift+Space.
@@ -66,6 +71,18 @@ export function applyPatch(cfg, patch, isVoice = () => true) {
       if (!Number.isFinite(s) || s < 0.5 || s > 2) return {error: 'Speed must be between 0.5 and 2.'};
       next.speed = s;
     }
+  }
+
+  if ('input' in patch) {
+    if (blank(patch.input)) delete next.input;
+    else if (patch.input !== 'selection' && patch.input !== 'clipboard')
+      return {error: 'Input must be "selection" or "clipboard".'};
+    else next.input = patch.input;
+  }
+
+  if ('nowPlaying' in patch) {
+    if (blank(patch.nowPlaying)) delete next.nowPlaying;
+    else next.nowPlaying = Boolean(patch.nowPlaying);
   }
 
   if ('telemetry' in patch) {

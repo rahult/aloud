@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test",
+    "test": "node --test --test-timeout=15000",
     "say": "node say.mjs",
     "tauri": "tauri"
   },

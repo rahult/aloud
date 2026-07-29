@@ -41,6 +41,7 @@ function harness() {
   return {server, session, player, cfgFile};
 }
 
+const stop = server => { server.closeAllConnections(); server.close(); };
 const listen = server => new Promise(r => server.listen(0, '127.0.0.1', () => r(server.address().port)));
 
 async function call(port, method, path, body) {
@@ -56,7 +57,7 @@ async function call(port, method, path, body) {
 test('GET /api/voices lists all 28 with grades', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {status, body} = await call(port, 'GET', '/api/voices');
   assert.equal(status, 200);
   assert.equal(body.length, 28);
@@ -66,7 +67,7 @@ test('GET /api/voices lists all 28 with grades', async t => {
 test('GET /api/health reports model and audio availability', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {body} = await call(port, 'GET', '/api/health');
   assert.equal(body.ok, true);
   assert.equal(body.modelLoaded, true);
@@ -76,7 +77,7 @@ test('GET /api/health reports model and audio availability', async t => {
 test('POST /api/speak starts a session', async t => {
   const {server, session} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {status, body} = await call(port, 'POST', '/api/speak', {text: 'one|two'});
   assert.equal(status, 200);
   assert.equal(body.count, 2);
@@ -87,7 +88,7 @@ test('POST /api/speak starts a session', async t => {
 test('POST /api/speak has no character cap', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {status} = await call(port, 'POST', '/api/speak', {text: 'x.'.repeat(5000)});
   assert.equal(status, 200);
 });
@@ -95,7 +96,7 @@ test('POST /api/speak has no character cap', async t => {
 test('POST /api/tts keeps its cap so the WAV stays bounded', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {status, body} = await call(port, 'POST', '/api/tts', {text: 'x'.repeat(2001)});
   assert.equal(status, 400);
   assert.match(body.error, /too long/);
@@ -104,7 +105,7 @@ test('POST /api/tts keeps its cap so the WAV stays bounded', async t => {
 test('POST /api/speak rejects empty text', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {status} = await call(port, 'POST', '/api/speak', {text: '   '});
   assert.equal(status, 400);
 });
@@ -112,7 +113,7 @@ test('POST /api/speak rejects empty text', async t => {
 test('toggle reports need_text when idle and stopped when speaking', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   assert.equal((await call(port, 'POST', '/api/playback/toggle')).body.action, 'need_text');
   await call(port, 'POST', '/api/speak', {text: 'one|two'});
   await settle();
@@ -124,7 +125,7 @@ test('toggle reports need_text when idle and stopped when speaking', async t => 
 test('toggle asks for text after the session ends naturally', async t => {
   const {server, player} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   await call(port, 'POST', '/api/speak', {text: 'only one'});
   await settle();
   player.finish();
@@ -135,7 +136,7 @@ test('toggle asks for text after the session ends naturally', async t => {
 test('GET /api/playback reports the live state', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   await call(port, 'POST', '/api/speak', {text: 'one|two'});
   await settle();
   const {body} = await call(port, 'GET', '/api/playback');
@@ -147,7 +148,7 @@ test('GET /api/playback reports the live state', async t => {
 test('the playback transport endpoints move the index', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   await call(port, 'POST', '/api/speak', {text: 'one|two|three'});
   await settle();
   await call(port, 'POST', '/api/playback/next');
@@ -163,7 +164,7 @@ test('the playback transport endpoints move the index', async t => {
 test('settings round-trip voice and speed', async t => {
   const {server, cfgFile} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const saved = await call(port, 'POST', '/api/settings', {voice: 'bm_george', speed: 1.5});
   assert.equal(saved.status, 200);
   const got = await call(port, 'GET', '/api/settings');
@@ -175,7 +176,7 @@ test('settings round-trip voice and speed', async t => {
 test('settings reject an unknown voice', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const {status, body} = await call(port, 'POST', '/api/settings', {voice: 'nope'});
   assert.equal(status, 400);
   assert.match(body.error, /Unknown voice/);
@@ -186,7 +187,7 @@ test('settings reject an unknown voice', async t => {
 test('speak with no voice uses the saved voice, not a hardcoded default', async t => {
   const {server, session} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   await call(port, 'POST', '/api/settings', {voice: 'bm_george', speed: 1.25});
   await call(port, 'POST', '/api/speak', {text: 'hello'});
   await settle();
@@ -197,7 +198,7 @@ test('speak with no voice uses the saved voice, not a hardcoded default', async 
 test('CORS preflight is answered', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const res = await fetch(`http://127.0.0.1:${port}/api/tts`, {method: 'OPTIONS'});
   assert.equal(res.status, 204);
   assert.equal(res.headers.get('access-control-allow-origin'), '*');
@@ -206,7 +207,7 @@ test('CORS preflight is answered', async t => {
 test('the SSE feed opens and pushes a state frame', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   const res = await fetch(`http://127.0.0.1:${port}/api/playback/events`);
   assert.match(res.headers.get('content-type'), /text\/event-stream/);
   const reader = res.body.getReader();
@@ -218,6 +219,65 @@ test('the SSE feed opens and pushes a state frame', async t => {
 test('unknown paths 404', async t => {
   const {server} = harness();
   const port = await listen(server);
-  t.after(() => server.close());
+  t.after(() => stop(server));
   assert.equal((await call(port, 'GET', '/api/nope')).status, 404);
+});
+
+// Reading an SSE stream blocks until a frame arrives, so every read is raced
+// against a timer — otherwise a missing event hangs the whole suite instead
+// of failing it.
+const readFrame = async (reader, ms = 1500) => {
+  let id;
+  const timer = new Promise(r => { id = setTimeout(() => r({timeout: true}), ms); });
+  const got = await Promise.race([reader.read(), timer]);
+  clearTimeout(id);
+  if (got.timeout || got.done) return '';
+  return new TextDecoder().decode(got.value);
+};
+
+test('app-command relays to the SSE feed for the native layer', async t => {
+  const {server} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+
+  const res = await fetch(`http://127.0.0.1:${port}/api/playback/events`);
+  const reader = res.body.getReader();
+  await readFrame(reader);                              // opening frames
+
+  const posted = await call(port, 'POST', '/api/app-command', {name: 'request-accessibility'});
+  assert.equal(posted.status, 200);
+
+  let seen = '';
+  for (let i = 0; i < 4 && !seen.includes('event: command'); i++) seen += await readFrame(reader);
+  assert.match(seen, /event: command/);
+  assert.match(seen, /request-accessibility/);
+  await reader.cancel();
+});
+
+test('app-command rejects an unknown command', async t => {
+  const {server} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  const {status} = await call(port, 'POST', '/api/app-command', {name: 'rm -rf /'});
+  assert.equal(status, 400);
+});
+
+test('native-status is reported back through settings', async t => {
+  const {server} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  assert.equal((await call(port, 'GET', '/api/settings')).body.accessibilityOk, null);
+  await call(port, 'POST', '/api/native-status', {accessibilityOk: false});
+  assert.equal((await call(port, 'GET', '/api/settings')).body.accessibilityOk, false);
+  await call(port, 'POST', '/api/native-status', {accessibilityOk: true});
+  assert.equal((await call(port, 'GET', '/api/settings')).body.accessibilityOk, true);
+});
+
+test('settings expose the input mode', async t => {
+  const {server} = harness();
+  const port = await listen(server);
+  t.after(() => stop(server));
+  assert.equal((await call(port, 'GET', '/api/settings')).body.input, 'selection');
+  await call(port, 'POST', '/api/settings', {input: 'clipboard'});
+  assert.equal((await call(port, 'GET', '/api/settings')).body.input, 'clipboard');
 });
