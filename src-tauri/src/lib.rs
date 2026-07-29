@@ -1,9 +1,8 @@
 mod events;
 mod selection;
+mod tray;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_shell::process::CommandChild;
@@ -218,6 +217,49 @@ fn watch_config(app: tauri::AppHandle, path: PathBuf, mut current: Shortcut) {
     });
 }
 
+// Fire-and-forget POST: menu clicks must never block the UI thread waiting
+// on the server.
+fn post(path: &'static str) {
+    std::thread::spawn(move || {
+        let _ = ureq::post(format!("{}{}", base_url(), path)).send_empty();
+    });
+}
+
+fn post_settings(body: serde_json::Value) {
+    std::thread::spawn(move || {
+        let _ = ureq::post(format!("{}/api/settings", base_url())).send_json(body);
+    });
+}
+
+pub fn on_tray_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
+    let id = event.id().as_ref().to_string();
+    match id.as_str() {
+        "show" => show_main_window(app),
+        "settings" => {
+            show_main_window(app);
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.eval("document.querySelector('[data-view=settings]')?.click()");
+            }
+        }
+        "quit" => app.exit(0),
+        // toggle-pause, not toggle: a menu item labelled "Pause" must never
+        // start speaking the clipboard.
+        "pb:play" => post("/api/playback/toggle-pause"),
+        "pb:prev" => post("/api/playback/prev"),
+        "pb:next" => post("/api/playback/next"),
+        "pb:stop" => post("/api/playback/stop"),
+        _ => {
+            if let Some(v) = id.strip_prefix("voice:") {
+                post_settings(serde_json::json!({"voice": v}));
+            } else if let Some(s) = id.strip_prefix("speed:") {
+                if let Ok(n) = s.parse::<f64>() {
+                    post_settings(serde_json::json!({"speed": n}));
+                }
+            }
+        }
+    }
+}
+
 fn show_main_window(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
@@ -272,9 +314,16 @@ pub fn run() {
 
             wait_for_server();
 
-            events::listen(app.handle().clone(), base_url(), |_app, event| match event {
+            events::listen(app.handle().clone(), base_url(), |app, event| match event {
                 events::Event::Command(name) => handle_command(&name),
-                _ => {}
+                events::Event::Playback(state) => {
+                    if let Some(handles) = app.try_state::<Mutex<tray::Handles>>() {
+                        if let Ok(h) = handles.lock() {
+                            tray::apply(&h, &state);
+                        }
+                    }
+                }
+                events::Event::Sentences(_) => {}
             });
             watch_accessibility();
 
@@ -295,27 +344,8 @@ pub fn run() {
                 }
             });
 
-            let show = MenuItemBuilder::with_id("show", "Show Chirp").build(app)?;
-            let settings = MenuItemBuilder::with_id("settings", "Settings…").build(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-            let menu = MenuBuilder::new(app).items(&[&show, &settings, &quit]).build()?;
-            TrayIconBuilder::new()
-                .icon(app.default_window_icon().expect("window icon").clone())
-                .menu(&menu)
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "show" => show_main_window(app),
-                    "settings" => {
-                        show_main_window(app);
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.eval(
-                                "document.querySelector('[data-view=settings]')?.click()",
-                            );
-                        }
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .build(app)?;
+            let handles = tray::build(app.handle(), &base_url())?;
+            app.manage(Mutex::new(handles));
 
             let hotkey = cfg_path
                 .as_deref()

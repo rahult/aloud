@@ -184,6 +184,15 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
     return 'need_text';
   }
 
+  // The tray's play/pause button. Distinct from toggle(): it never starts a
+  // new session, only suspends and resumes the current one — a menu item
+  // labelled "Pause" must not start speaking your clipboard.
+  function togglePause() {
+    if (state === 'speaking') { pause(); return 'paused'; }
+    if (state === 'paused') { resume(); return 'resumed'; }
+    return 'idle';
+  }
+
   // Voice or speed changed under a live session: everything cached was made
   // with the old settings, so drop it and re-speak from where we are.
   function setOptions({voice: nextVoice, speed: nextSpeed} = {}) {
@@ -197,7 +206,7 @@ export function createSession({engine, player, lookahead = 3, cacheLimit = 50}) 
   }
 
   return {
-    start, pause, resume, next, prev, stop, toggle, setOptions,
+    start, pause, resume, next, prev, stop, toggle, togglePause, setOptions,
     getState, getSentences,
     on: (e, fn) => bus.on(e, fn),
     off: (e, fn) => bus.off(e, fn),

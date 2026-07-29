@@ -253,3 +253,15 @@ test('after playing to its natural end, toggle asks for text (not "stopped")', a
   assert.equal(session.getState().state, 'idle');
   assert.equal(session.toggle(), 'need_text', 'the next hotkey press must speak, not be swallowed');
 });
+
+test('togglePause suspends and resumes but never starts a session', async () => {
+  const {session} = build();
+  assert.equal(session.togglePause(), 'idle', 'nothing to pause when idle');
+  assert.equal(session.getState().state, 'idle', 'and it must not start speaking');
+  session.start('one|two', {voice: 'af_heart', speed: 1});
+  await settle();
+  assert.equal(session.togglePause(), 'paused');
+  assert.equal(session.getState().state, 'paused');
+  assert.equal(session.togglePause(), 'resumed');
+  assert.equal(session.getState().state, 'speaking');
+});

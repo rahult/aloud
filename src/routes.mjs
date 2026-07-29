@@ -129,7 +129,10 @@ export function createRoutes({
     }).catch(e => send(res, 400, {error: e.message}));
   }
 
-  const TRANSPORT = {pause: 'pause', resume: 'resume', next: 'next', prev: 'prev', stop: 'stop'};
+  const TRANSPORT = {
+    pause: 'pause', resume: 'resume', next: 'next', prev: 'prev', stop: 'stop',
+    'toggle-pause': 'togglePause',
+  };
 
   return function route(req, res) {
     if (req.method === 'OPTIONS') return send(res, 204, {});
