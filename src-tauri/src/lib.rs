@@ -210,13 +210,22 @@ pub fn run() {
             });
 
             let show = MenuItemBuilder::with_id("show", "Show Chirp").build(app)?;
+            let settings = MenuItemBuilder::with_id("settings", "Settings…").build(app)?;
             let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-            let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
+            let menu = MenuBuilder::new(app).items(&[&show, &settings, &quit]).build()?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().expect("window icon").clone())
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id().as_ref() {
                     "show" => show_main_window(app),
+                    "settings" => {
+                        show_main_window(app);
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.eval(
+                                "document.querySelector('[data-view=settings]')?.click()",
+                            );
+                        }
+                    }
                     "quit" => app.exit(0),
                     _ => {}
                 })
