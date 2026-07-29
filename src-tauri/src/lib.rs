@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
@@ -24,10 +23,6 @@ fn base_url() -> String {
         PORT.get().copied().unwrap_or(DEFAULT_PORT)
     )
 }
-
-// Best-effort playback state: set once /api/speak accepts an utterance,
-// cleared on /api/stop. Drives the hotkey's speak/stop toggle.
-static PLAYING: AtomicBool = AtomicBool::new(false);
 
 // Keep the node sidecar alive for the app's lifetime; dropping it on exit
 // terminates the TTS server.
@@ -70,30 +65,36 @@ fn wait_for_server() {
     }
 }
 
-// Hotkey: stop playback if speaking, else speak the clipboard.
+// Hotkey: ask the server what to do. It is the only thing that knows whether
+// audio is playing, so it decides — and only tells us to fetch text when it
+// actually needs some. Reading the clipboard is cheap, but capturing a
+// selection (Phase 2) will not be, so the "need_text" round trip stays.
+//
+// This replaces a local AtomicBool that went stale whenever audio finished on
+// its own, which spent the next hotkey press on a no-op stop.
 fn toggle_speak(app: &tauri::AppHandle) {
     eprintln!("chirp: hotkey pressed");
-    if PLAYING.swap(false, Ordering::SeqCst) {
-        std::thread::spawn(|| {
-            let _ = ureq::post(format!("{}/api/stop", base_url())).send_empty();
-        });
-        return;
-    }
-    let Ok(text) = app.clipboard().read_text() else {
-        return;
-    };
-    let text = text.trim().to_string();
-    if text.is_empty() {
-        return;
-    }
+    let app = app.clone();
     std::thread::spawn(move || {
-        if let Ok(res) = ureq::post(format!("{}/api/speak", base_url()))
-            .send_json(serde_json::json!({"text": text}))
-        {
-            if res.status().is_success() {
-                PLAYING.store(true, Ordering::SeqCst);
-            }
+        let Ok(res) = ureq::post(format!("{}/api/playback/toggle", base_url())).send_empty() else {
+            eprintln!("chirp: toggle failed — is the server running?");
+            return;
+        };
+        let Ok(body) = res.into_body().read_json::<serde_json::Value>() else {
+            return;
+        };
+        if body.get("action").and_then(|v| v.as_str()) != Some("need_text") {
+            return;
         }
+        let Ok(text) = app.clipboard().read_text() else {
+            return;
+        };
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        let _ = ureq::post(format!("{}/api/speak", base_url()))
+            .send_json(serde_json::json!({"text": text}));
     });
 }
 
@@ -242,11 +243,19 @@ pub fn run() {
             // A conflicting registration (e.g. another app holds the combo)
             // must not take down the whole app — the user can pick another
             // combo in Settings and the watcher applies it live.
-            if let Err(e) = register_hotkey(app.handle(), shortcut) {
-                eprintln!("chirp: could not register hotkey {hotkey}: {e}");
-            } else {
-                eprintln!("chirp: hotkey registered: {hotkey}");
+            let registered = register_hotkey(app.handle(), shortcut);
+            match &registered {
+                Err(e) => eprintln!("chirp: could not register hotkey {hotkey}: {e}"),
+                Ok(()) => eprintln!("chirp: hotkey registered: {hotkey}"),
             }
+            // Let Settings say "in use by another app" instead of the hotkey
+            // silently doing nothing.
+            let ok = registered.is_ok();
+            let reported = hotkey.clone();
+            std::thread::spawn(move || {
+                let _ = ureq::post(format!("{}/api/hotkey-status", base_url()))
+                    .send_json(serde_json::json!({"ok": ok, "hotkey": reported}));
+            });
             if let Some(path) = cfg_path {
                 watch_config(app.handle().clone(), path, shortcut);
             }

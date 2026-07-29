@@ -24,18 +24,40 @@ From the shell:
 node say.mjs "The quick brown fox."              # plays it (macOS afplay)
 node say.mjs "The quick brown fox." -o fox.wav   # writes a file
 node say.mjs "Hullo." -v bm_george               # British voice
+node say.mjs "Faster, please." -s 1.5            # speaking rate
+
+echo "Piped from anywhere." | node say.mjs --system   # speaks a whole document
+pbpaste | node say.mjs --system                       # read the clipboard aloud
+node say.mjs --voices                                 # list all 28, graded
 ```
 
 ## API
 
+Two ways to speak. `POST /api/tts` renders one complete WAV and hands it back —
+simple, but it has to finish before you hear anything, so it is capped.
+`POST /api/speak` starts a **playback session**: the text is split into
+sentences, generated one at a time, and played through the system audio output.
+Speech starts after the first sentence rather than the whole document, so there
+is no length limit.
+
 | Endpoint | Description |
 | --- | --- |
-| `POST /api/tts` | Body `{"text": "…", "voice": "af_heart", "speed": 1.25}` → `audio/wav`. Max 2000 chars, generation is serialized. `voice` and `speed` (0.5–2, default 1) are optional. |
-| `GET /api/voices` | List of voices: `[{id, label, lang}]`. |
-| `GET /api/health` | `{ok, modelLoaded}` — model loads lazily on first TTS call. |
-| `GET /api/settings` | `{port, hotkey, activePort}` — current settings, defaults applied. |
-| `POST /api/settings` | Body `{"port": 8800, "hotkey": "CmdOrCtrl+Shift+S"}` → persists to `~/.chirp/config.json`. Blank values restore defaults. Port binds on next start; the desktop app re-registers the hotkey live. |
+| `POST /api/tts` | Body `{"text": "…", "voice": "af_heart", "speed": 1.25}` → `audio/wav`. Max 2000 chars. `voice` and `speed` (0.5–2) are optional and fall back to your saved settings. |
+| `POST /api/speak` | Body `{"text": "…", "voice"?, "speed"?}` → `{ok, count}`. Starts a session and plays through the speakers. No length limit. |
+| `GET /api/playback` | `{state, index, count, sentences, voice, speed, startedAt, durationMs}`. `state` is `idle`, `speaking`, or `paused`. |
+| `POST /api/playback/toggle` | `{action}` — `stopped` if speaking, `resumed` if paused, `need_text` if idle. The hotkey's contract: fetch text only when the server asks for it. |
+| `POST /api/playback/{pause,resume,next,prev,stop}` | Transport controls. `next`/`prev` move a sentence at a time. |
+| `GET /api/playback/events` | Server-sent events: `state`, `sentences`, `model` (download progress), `error`. |
+| `GET /api/voices` | All 28 voices: `[{id, name, label, lang, gender, grade, recommended}]`, best-graded first. |
+| `GET /api/health` | `{ok, modelLoaded, audioOut}` — `audioOut` is false if no system audio player was found. |
+| `GET /api/settings` | `{port, hotkey, voice, speed, activePort, …}` — current settings, defaults applied. |
+| `POST /api/settings` | Body `{"port": 8800, "hotkey": "CmdOrCtrl+Shift+S", "voice": "bm_george", "speed": 1.25}` → persists to `~/.chirp/config.json`. Blank values restore defaults. Port binds on next start; the desktop app re-registers the hotkey live. |
 | `GET /` | Web UI. |
+
+Because a single session on the server is the source of truth, the hotkey, the
+tray, the CLI, and every open browser tab all show and control the same
+playback. Speak something from the shell and an open web UI will render the
+transcript and follow along.
 
 CORS is open (`Access-Control-Allow-Origin: *`) so any local web app can call
 it directly. Port via `CHIRP_PORT` (default 8789); CLI target via `CHIRP_URL`.
@@ -62,8 +84,12 @@ server — same `POST /api/tts` contract, plus optional per-request `voice`.
 
 - The model is cached by transformers.js under `~/.cache/huggingface` after the
   first download.
-- Requires Node.js ≥ 20.11. Everything runs on CPU; a request takes a second or
-  two for a sentence.
+- Requires Node.js ≥ 20.11. Everything runs on CPU. Speech starts once the
+  first sentence is generated — usually under a second — and the rest is
+  produced while it plays, so length barely affects how long you wait.
+- `npm test` runs the suite (`node --test`, no extra dependencies). It uses
+  fakes for the model and the audio device, so it passes without the ~90 MB
+  download and without making a sound.
 - The app offers **opt-in** anonymous usage analytics (Google Analytics) on
   first run — counts and voice ids only, never text. Decline and nothing is
   ever sent; change your mind anytime in Settings. The product site
@@ -77,7 +103,8 @@ else to install:
 
 - Lives in the menu bar / system tray — no dock icon, no taskbar clutter.
 - **Cmd/Ctrl+Shift+Space** speaks whatever is on the clipboard through the OS
-  audio output. Press it again to stop.
+  audio output, in the voice and speed saved in Settings. Press it again to
+  stop.
 - The tray menu's **Show Chirp** opens the same web UI at
   `http://127.0.0.1:8789/` in a small window; closing the window just hides
   it. **Quit** exits the app.

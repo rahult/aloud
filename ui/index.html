@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chirp — local text-to-speech</title>
+<link rel="stylesheet" href="/style.css">
+</head><body>
+<aside>
+ <div class="wordmark">Chirp<i>.</i></div>
+ <nav>
+  <button class="nav active" data-view="voice">Voice</button>
+  <button class="nav" data-view="settings">Settings</button>
+ </nav>
+ <div class="status" id="status"><span class="dot"></span><span id="statusText">Warms up on first speak</span></div>
+</aside>
+<main>
+ <div class="consent" id="consent" hidden>
+  <p>Share anonymous usage analytics? Your text never leaves this machine — only counts like “spoke 120 characters”.</p>
+  <div class="consent-actions">
+   <button class="primary" id="consentYes">Allow</button>
+   <button id="consentNo">No thanks</button>
+  </div>
+ </div>
+ <section id="view-voice">
+  <h1>Type it. <em>Hear it.</em></h1>
+  <p class="sub">Neural text-to-speech on this machine — Kokoro-82M, fully on-device. Your text never leaves.</p>
+  <div class="field">
+   <textarea id="t" maxlength="2000" placeholder="Something worth hearing…" spellcheck="false">The quick brown fox jumps over the lazy dog.</textarea>
+   <span class="count" id="count"></span>
+  </div>
+  <div class="controls">
+   <select id="v" aria-label="Voice"></select>
+   <button class="primary" id="speak">Speak</button>
+   <button id="dl" disabled>Download</button>
+  </div>
+  <p class="error" id="err" role="alert"></p>
+  <div class="player" id="player" hidden>
+   <div class="pcontrols">
+    <button class="iconbtn" id="prev" aria-label="Previous sentence"><svg viewBox="0 0 16 16"><path d="M3 3h2v10H3zM13 3v10L6 8z"/></svg></button>
+    <button class="iconbtn primary" id="play" aria-label="Play"><svg viewBox="0 0 16 16"><path d="M5 3v10l8-5z"/></svg></button>
+    <button class="iconbtn" id="next" aria-label="Next sentence"><svg viewBox="0 0 16 16"><path d="M11 3h2v10h-2zM3 3v10l7-5z"/></svg></button>
+    <div class="track" id="track" aria-hidden="true"></div>
+    <button class="rate" id="rate">1×</button>
+   </div>
+   <div class="transcript" id="transcript"></div>
+  </div>
+  <div class="hint">
+   <span><kbd>⌘</kbd> <kbd>↵</kbd> to speak</span>
+   <span><code>POST /api/tts</code> · port <span id="portLabel">…</span> · local only</span>
+  </div>
+ </section>
+ <section id="view-settings" hidden>
+  <h1>Settings</h1>
+  <p class="sub">Saved on this machine — shared by the app, the server, and the CLI.</p>
+  <div class="panel">
+   <div class="setting">
+    <label for="speed">Speed</label>
+    <input type="range" id="speed" min="0.5" max="2" step="0.05" value="1">
+    <span class="val" id="speedVal">1×</span>
+    <span class="ticks" aria-hidden="true"><span>0.5×</span><span>2×</span></span>
+   </div>
+   <div class="setting">
+    <label for="port">Port</label>
+    <input type="text" class="text" id="port" inputmode="numeric" autocomplete="off" spellcheck="false">
+    <span class="note" id="portNote"></span>
+   </div>
+   <div class="setting">
+    <label for="hotkey">Hotkey</label>
+    <input type="text" class="text" id="hotkey" autocomplete="off" spellcheck="false" placeholder="Click, then press the combo">
+    <button class="notebtn" id="hotkeyTest">Test</button>
+   </div>
+   <div class="setting">
+    <label for="analytics">Analytics</label>
+    <input type="checkbox" id="analytics">
+    <span class="note" id="analyticsNote">anonymous</span>
+   </div>
+   <p class="smsg" id="smsg"></p>
+   <button class="reset" id="reset">Reset to defaults</button>
+  </div>
+ </section>
+</main>
+<script src="/app.js"></script>
+</body></html>

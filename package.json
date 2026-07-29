@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node server.mjs",
+    "test": "node --test",
     "say": "node say.mjs",
     "tauri": "tauri"
   },
