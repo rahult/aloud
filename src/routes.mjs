@@ -14,6 +14,12 @@ export function createRoutes({
 }) {
   const clients = new Set();
   let hotkeyOk = true;
+  let accessibilityOk = null;
+
+  // Commands the web UI may ask the desktop app to perform. An allowlist,
+  // because this is a local HTTP surface with CORS wide open — any page in
+  // the browser can post here.
+  const APP_COMMANDS = new Set(['request-accessibility', 'open-accessibility-settings']);
 
   const settings = () => config.resolve(config.read(configFile));
 
@@ -123,7 +129,10 @@ export function createRoutes({
     }).catch(e => send(res, 400, {error: e.message}));
   }
 
-  const TRANSPORT = {pause: 'pause', resume: 'resume', next: 'next', prev: 'prev', stop: 'stop'};
+  const TRANSPORT = {
+    pause: 'pause', resume: 'resume', next: 'next', prev: 'prev', stop: 'stop',
+    'toggle-pause': 'togglePause',
+  };
 
   return function route(req, res) {
     if (req.method === 'OPTIONS') return send(res, 204, {});
@@ -159,6 +168,7 @@ export function createRoutes({
         telemetry: stored.telemetry ?? null,
         hotkeyCustom: stored.hotkey != null,
         hotkeyOk,
+        accessibilityOk,
       });
     }
     if (POST && p === '/api/settings') return saveSettings(req, res);
@@ -168,6 +178,27 @@ export function createRoutes({
     if (POST && p === '/api/hotkey-status') {
       return readBody(req).then(body => {
         hotkeyOk = body.ok !== false;
+        send(res, 200, {ok: true});
+      }).catch(e => send(res, 400, {error: e.message}));
+    }
+
+    // UI → server → SSE → desktop app. The window loads a remote origin, so
+    // Tauri IPC is not available to it; the event feed is the way back.
+    if (POST && p === '/api/app-command') {
+      return readBody(req).then(body => {
+        if (!APP_COMMANDS.has(body.name))
+          return send(res, 400, {error: `Unknown command: ${body.name}`});
+        push('command', {name: body.name});
+        send(res, 200, {ok: true});
+      }).catch(e => send(res, 400, {error: e.message}));
+    }
+
+    // What the native layer can and cannot do, so Settings can explain
+    // itself rather than letting the hotkey fail silently.
+    if (POST && p === '/api/native-status') {
+      return readBody(req).then(body => {
+        if ('accessibilityOk' in body) accessibilityOk = Boolean(body.accessibilityOk);
+        if ('hotkeyOk' in body) hotkeyOk = Boolean(body.hotkeyOk);
         send(res, 200, {ok: true});
       }).catch(e => send(res, 400, {error: e.message}));
     }

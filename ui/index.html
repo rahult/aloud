@@ -68,6 +68,19 @@
     <button class="notebtn" id="hotkeyTest">Test</button>
    </div>
    <div class="setting">
+    <label for="input">Reads</label>
+    <select id="input" class="text">
+     <option value="selection">Selected text</option>
+     <option value="clipboard">Clipboard</option>
+    </select>
+    <span class="note" id="inputNote"></span>
+   </div>
+   <div class="setting" id="accessRow" hidden>
+    <label>Access</label>
+    <span class="smsg" id="accessMsg">Chirp needs Accessibility permission to read the selection.</span>
+    <button class="notebtn" id="accessBtn">Grant…</button>
+   </div>
+   <div class="setting">
     <label for="analytics">Analytics</label>
     <input type="checkbox" id="analytics">
     <span class="note" id="analyticsNote">anonymous</span>

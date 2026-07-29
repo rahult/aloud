@@ -102,12 +102,47 @@ Tauri. It bundles its own Node runtime and this server, so there's nothing
 else to install:
 
 - Lives in the menu bar / system tray — no dock icon, no taskbar clutter.
-- **Cmd/Ctrl+Shift+Space** speaks whatever is on the clipboard through the OS
-  audio output, in the voice and speed saved in Settings. Press it again to
-  stop.
+- **Cmd/Ctrl+Shift+Space** speaks **whatever text you have selected**, in any
+  app, in the voice and speed saved in Settings. Press it again to stop. Your
+  clipboard is left exactly as it was — Chirp saves it, copies the selection,
+  and puts the original back. With nothing selected it falls back to the
+  clipboard.
+  - On macOS this needs Accessibility permission (Settings shows a **Grant…**
+    button when it is missing; without it the hotkey can only read the
+    clipboard). On X11/Wayland the PRIMARY selection is read directly, so no
+    permission and no keystroke are involved.
+  - Prefer the old behaviour? **Settings ▸ Reads ▸ Clipboard**.
+- The tray menu is a transport: **Play/Pause, Previous, Next, Stop**, plus
+  **Voice** and **Speed** submenus. It always agrees with the web UI, because
+  both are views of the same session on the server.
 - The tray menu's **Show Chirp** opens the same web UI at
   `http://127.0.0.1:8789/` in a small window; closing the window just hides
   it. **Quit** exits the app.
+
+### Known limitations
+
+Two macOS integrations are implemented but do **not** currently work. They are
+left in the tree because the diagnosis is worth keeping, not because they are
+expected to start working on their own.
+
+- **The "Speak with Chirp" Services menu entry never appears.** The
+  `NSServices` declaration does reach the bundle and does register with the
+  system (`pbs -dump_pboard` lists it), but the item shows up in no
+  application's Services menu. The likely cause is that Chirp sets
+  `ActivationPolicy::Accessory` at runtime to stay out of the Dock, and macOS
+  does not surface Services from background-only apps. Fixing it probably
+  means giving up the accessory policy, which is a worse trade.
+- **Now Playing and media keys are unverified.** The handlers are wired to
+  `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`, but macOS attributes
+  Now Playing to the process that owns the audio session — and Chirp's audio
+  comes from `afplay`, a separate process the server spawns. Making this work
+  would mean playing audio in-process, which would also allow true
+  mid-sentence pause. That is a change to where playback lives, not a fix to
+  this code.
+
+Because the OS players cannot pause a running file, **pause is
+sentence-granular**: resuming replays the sentence you paused on rather than
+continuing mid-word.
 
 Download the latest build for your platform from
 [GitHub releases](https://github.com/rahult/chirp/releases). The first TTS

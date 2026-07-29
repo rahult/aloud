@@ -49,6 +49,20 @@ test('applyPatch does not mutate the input config', () => {
   assert.equal(before.port, 9000);
 });
 
+test('input selects what the hotkey reads, defaulting to the selection', () => {
+  assert.equal(DEFAULTS.input, 'selection');
+  assert.equal(ok(applyPatch({}, {input: 'clipboard'})).input, 'clipboard');
+  assert.equal(ok(applyPatch({}, {input: 'selection'})).input, 'selection');
+  assert.match(applyPatch({}, {input: 'telepathy'}).error, /selection.*clipboard/);
+  assert.deepEqual(ok(applyPatch({input: 'clipboard'}, {input: ''})), {});
+});
+
+test('nowPlaying is a boolean that defaults on', () => {
+  assert.equal(DEFAULTS.nowPlaying, true);
+  assert.equal(ok(applyPatch({}, {nowPlaying: false})).nowPlaying, false);
+  assert.deepEqual(ok(applyPatch({nowPlaying: false}, {nowPlaying: ''})), {});
+});
+
 test('telemetry is tri-state: absent, true, or false', () => {
   assert.equal('telemetry' in ok(applyPatch({}, {})), false);
   assert.equal(ok(applyPatch({}, {telemetry: true})).telemetry, true);
