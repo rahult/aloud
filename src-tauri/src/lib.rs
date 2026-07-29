@@ -1,3 +1,4 @@
+mod events;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
@@ -193,6 +194,10 @@ pub fn run() {
             app.manage(Backend(Mutex::new(Some(child))));
 
             wait_for_server();
+
+            events::listen(app.handle().clone(), base_url(), |_app, event| {
+                eprintln!("chirp: event {event:?}");
+            });
 
             let window = WebviewWindowBuilder::new(
                 app,
