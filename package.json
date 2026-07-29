@@ -1,6 +1,6 @@
 {
   "name": "chirp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Local neural text-to-speech as a tiny HTTP service. Kokoro-82M, fully on-device.",
   "type": "module",
   "engines": {
